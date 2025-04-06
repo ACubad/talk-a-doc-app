@@ -2,27 +2,28 @@
 
 "use client"; // Required for hooks like useState
 
-import React, { useState, useEffect, useRef } from 'react'; // Import useRef
-import { useTranscription } from '@/hooks/useTranscription'; // Import the hook
+import React, { useState, useEffect, useRef } from 'react';
+import { useTranscription } from '@/hooks/useTranscription';
 
 // Import Shadcn UI components
 import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area"; // Import ScrollArea
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
-// import { Badge } from "@/components/ui/badge"; // Not used yet
-// TODO: Add Loader2 for loading state later: import { Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react"; // Import Loader2
 
 export default function Home() {
-  const [selectedLanguage, setSelectedLanguage] = useState('en-US'); // Default to US English
+  const [selectedLanguage, setSelectedLanguage] = useState('en-US'); // Input language
+  const [outputLanguage, setOutputLanguage] = useState('en'); // Output language, default English
   const [selectedDocType, setSelectedDocType] = useState('');
   const [selectedFormat, setSelectedFormat] = useState('');
   const [generatedContent, setGeneratedContent] = useState('');
   const [isLoading, setIsLoading] = useState(false); // Loading state for generation
   const [isDownloading, setIsDownloading] = useState(false); // Loading state for download
-  const [apiError, setApiError] = useState<string | null>(null); // Add API error state
+  const [apiError, setApiError] = useState<string | null>(null);
 
   // Use the transcription hook
   const {
@@ -84,7 +85,8 @@ export default function Home() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ transcription, docType }),
+        // Include outputLanguage in the request body
+        body: JSON.stringify({ transcription, docType, outputLanguage }),
       });
 
       if (!response.ok) {
@@ -166,10 +168,20 @@ export default function Home() {
     { code: 'tr-TR', name: 'Turkish' },
     { code: 'es-ES', name: 'Spanish (Spain)' },
     { code: 'de-DE', name: 'German' },
+    // Add more input languages if supported by Google Speech API
+  ];
+
+  const outputLanguages = [
+      { code: 'en', name: 'English' },
+      { code: 'es', name: 'Spanish' },
+      { code: 'tr', name: 'Turkish' },
+      { code: 'sw', name: 'Swahili' },
+      { code: 'de', name: 'German' },
+      // Add more output languages supported by Gemini
   ];
 
   const docTypes = ['Report', 'Email', 'Excel', 'PowerPoint'];
-  const formats = ['DOCX', 'PDF', 'CSV', 'PPTX']; // PPTM handled via VBA in PPTX
+  const formats = ['DOCX', 'PDF', 'CSV', 'PPTX'];
 
   return (
     <div className="container mx-auto p-4 md:p-8 min-h-screen flex flex-col gap-8">
@@ -212,11 +224,11 @@ export default function Home() {
                   if (isRecording) {
                     stopRecording();
                   } else {
-                    startRecording(); // No language argument needed now
+                    startRecording();
                   }
                 }}
-                // disabled={!isConnected} // Removed connection check
                 variant={isRecording ? "destructive" : "default"}
+                className="transition-colors duration-200" // Add transition
               >
                 {isRecording ? 'Stop Recording' : 'Start Recording'}
               </Button>
@@ -232,7 +244,8 @@ export default function Home() {
               <Button
                 variant="outline"
                 onClick={handleUploadClick}
-                disabled={isRecording || isTranscribing} // Disable while recording or processing
+                disabled={isRecording || isTranscribing}
+                className="transition-colors duration-200" // Add transition
               >
                 Upload Audio
               </Button>
@@ -280,23 +293,43 @@ export default function Home() {
                   <Button
                     key={type}
                     variant={selectedDocType === type ? "default" : "secondary"}
-                    onClick={() => handleGenerateContent(type)} // Call API on click
-                    disabled={isLoading || !transcription} // Disable while loading or if no transcription
+                    onClick={() => handleGenerateContent(type)}
+                    disabled={isLoading || !transcription}
+                    className="transition-colors duration-200" // Add transition
                   >
-                    {/* TODO: Add loading indicator */}
-                    {isLoading && selectedDocType === type ? 'Generating...' : type}
+                    {isLoading && selectedDocType === type ? (
+                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating...</>
+                    ) : type}
                   </Button>
                 ))}
               </div>
             </div>
 
+             {/* Output Language Selection */}
+             <div className="grid w-full max-w-sm items-center gap-1.5">
+               <Label htmlFor="output-language-select">Select Output Language</Label>
+               <Select value={outputLanguage} onValueChange={setOutputLanguage}>
+                 <SelectTrigger id="output-language-select" className="w-full">
+                   <SelectValue placeholder="Select language..." />
+                 </SelectTrigger>
+                 <SelectContent>
+                   {outputLanguages.map(lang => (
+                     <SelectItem key={lang.code} value={lang.code}>{lang.name}</SelectItem>
+                   ))}
+                 </SelectContent>
+               </Select>
+             </div>
+
             {/* Generated Content Preview */}
             <div className="grid w-full gap-1.5">
               <Label htmlFor="preview-area">Preview {isLoading ? '(Generating...)' : ''}</Label>
-              {/* TODO: Replace with Shadcn ScrollArea or similar */}
-              <div id="preview-area" className={`w-full p-3 border rounded h-40 bg-muted overflow-auto text-sm ${isLoading ? 'opacity-50' : ''}`}>
-                {generatedContent || <span className="text-muted-foreground">Select a document type above to generate content...</span>}
-              </div>
+              <ScrollArea className={`h-40 w-full rounded-md border p-3 bg-muted ${isLoading ? 'opacity-50 animate-pulse' : ''}`}>
+                 {generatedContent ? (
+                   <div dangerouslySetInnerHTML={{ __html: generatedContent }} />
+                 ) : (
+                   <span className="text-muted-foreground">Select a document type above to generate content...</span>
+                 )}
+               </ScrollArea>
             </div>
 
              {/* Display API Errors */}
@@ -319,6 +352,7 @@ export default function Home() {
                     key={format}
                     variant={selectedFormat === format ? "default" : "secondary"}
                     onClick={() => setSelectedFormat(format)}
+                    className="transition-colors duration-200" // Add transition
                   >
                     {format}
                   </Button>
@@ -330,9 +364,11 @@ export default function Home() {
             <Button
               onClick={handleDownload}
               disabled={!generatedContent || !selectedFormat || isDownloading || isLoading}
+              className="transition-colors duration-200" // Add transition
             >
-              {/* TODO: Add loading indicator */}
-              {isDownloading ? 'Downloading...' : `Download ${selectedFormat || '...'}`}
+              {isDownloading ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Downloading...</>
+              ) : `Download ${selectedFormat || '...'}`}
             </Button>
           </CardContent>
         </Card>

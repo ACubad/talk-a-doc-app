@@ -4,32 +4,38 @@ import { geminiModel } from '@/lib/geminiClient'; // Import the initialized Gemi
 // Define the expected request body structure
 interface GenerateRequestBody {
   transcription: string;
-  docType: 'Report' | 'Email' | 'Excel' | 'PowerPoint' | string; // Allow string for flexibility
+  docType: 'Report' | 'Email' | 'Excel' | 'PowerPoint' | string;
+  outputLanguage: string; // Added output language
 }
 
-// Define prompts for different document types
+// Define prompts for different document types, requesting HTML output
 const prompts = {
-  Report: (text: string) => `Generate a formal report based on the following text:\n\n---\n${text}\n---`,
-  Email: (text: string) => `Format the following text as a professional email. Infer necessary components like subject, greeting, and closing if possible:\n\n---\n${text}\n---`,
-  Excel: (text: string) => `Extract structured data suitable for a CSV/Excel sheet from the following text. Present it clearly, perhaps as key-value pairs, a list of items, or a simple table structure in plain text:\n\n---\n${text}\n---`,
-  PowerPoint: (text: string) => `Generate concise bullet points suitable for a PowerPoint presentation summarizing the key information in the following text:\n\n---\n${text}\n---`,
-  Default: (text: string) => `Process the following text:\n\n---\n${text}\n---`,
+  Report: (text: string, language: string) => `Generate a formal report in ${language} based on the following text. Use simple HTML tags for formatting (like <b> for bold, <i> for italic, <p> for paragraphs, <ul> and <li> for lists). Do NOT use Markdown syntax like ** or *:\n\n---\n${text}\n---`,
+  Email: (text: string, language: string) => `Format the following text as a professional email in ${language}. Infer necessary components like subject, greeting, and closing if possible. Use simple HTML tags for formatting (like <b> for bold, <i> for italic, <p> for paragraphs). Do NOT use Markdown syntax like ** or *:\n\n---\n${text}\n---`,
+  // Excel/CSV should remain plain text, but specify language for content extraction context
+  Excel: (text: string, language: string) => `Extract structured data suitable for a CSV/Excel sheet from the following text (which is in ${language}). Present it clearly as plain text, perhaps as key-value pairs, a list of items, or a simple table structure. Do NOT use HTML or Markdown:\n\n---\n${text}\n---`,
+  // PowerPoint should be concise points, specify language
+  PowerPoint: (text: string, language: string) => `Generate concise bullet points in ${language} suitable for a PowerPoint presentation summarizing the key information in the following text. Use simple HTML tags for formatting if necessary (<b>, <i>). Do NOT use Markdown syntax like ** or *:\n\n---\n${text}\n---`,
+  Default: (text: string, language: string) => `Process the following text (in ${language}). Use simple HTML tags for formatting if appropriate. Do NOT use Markdown syntax like ** or *:\n\n---\n${text}\n---`,
 };
 
 export async function POST(request: Request) {
   try {
     const body: GenerateRequestBody = await request.json();
-    const { transcription, docType } = body;
+    // Extract outputLanguage
+    const { transcription, docType, outputLanguage } = body;
 
-    if (!transcription || !docType) {
-      return NextResponse.json({ error: 'Missing transcription or docType in request body' }, { status: 400 });
+    // Add outputLanguage to validation
+    if (!transcription || !docType || !outputLanguage) {
+      return NextResponse.json({ error: 'Missing transcription, docType, or outputLanguage in request body' }, { status: 400 });
     }
 
     // Select the appropriate prompt, defaulting if docType is unexpected
     const promptGenerator = prompts[docType as keyof typeof prompts] || prompts.Default;
-    const prompt = promptGenerator(transcription);
+    // Call prompt generator with both arguments
+    const prompt = promptGenerator(transcription, outputLanguage);
 
-    console.log(`Generating content for docType: ${docType}`); // Server log
+    console.log(`Generating content for docType: ${docType} in language: ${outputLanguage}`); // Server log
 
     // Call the Gemini API
     const result = await geminiModel.generateContent(prompt);
