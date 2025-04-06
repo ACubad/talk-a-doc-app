@@ -1,102 +1,135 @@
-import Image from "next/image";
+"use client"; // Required for hooks like useState
+
+import React, { useState } from 'react';
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  // Basic state placeholders (will be expanded)
+  const [selectedLanguage, setSelectedLanguage] = useState('en-US'); // Default to US English
+  const [isRecording, setIsRecording] = useState(false);
+  const [transcription, setTranscription] = useState('');
+  const [selectedDocType, setSelectedDocType] = useState('');
+  const [selectedFormat, setSelectedFormat] = useState('');
+  const [generatedContent, setGeneratedContent] = useState('');
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+  const languages = [
+    { code: 'en-US', name: 'English (US)' },
+    { code: 'sw-TZ', name: 'Swahili (Tanzania)' },
+    { code: 'tr-TR', name: 'Turkish' },
+    { code: 'es-ES', name: 'Spanish (Spain)' },
+    { code: 'de-DE', name: 'German' },
+  ];
+
+  const docTypes = ['Report', 'Email', 'Excel', 'PowerPoint'];
+  const formats = ['DOCX', 'PDF', 'CSV', 'PPTX']; // PPTM handled via VBA in PPTX
+
+  return (
+    <div className="container mx-auto p-4 md:p-8 min-h-screen flex flex-col gap-8">
+      <header className="text-center">
+        <h1 className="text-3xl font-bold">Talk A Doc</h1>
+        <p className="text-muted-foreground">Generate documents from your voice.</p>
+      </header>
+
+      <main className="grid grid-cols-1 md:grid-cols-2 gap-8 flex-grow">
+        {/* Left Column: Input & Transcription */}
+        <section className="flex flex-col gap-4 border rounded-lg p-4">
+          <h2 className="text-xl font-semibold mb-2">1. Input & Transcribe</h2>
+
+          {/* Language Selection */}
+          <div>
+            <label htmlFor="language-select" className="block text-sm font-medium mb-1">Select Language:</label>
+            <select
+              id="language-select"
+              value={selectedLanguage}
+              onChange={(e) => setSelectedLanguage(e.target.value)}
+              className="w-full p-2 border rounded" // Basic select, replace with Shadcn later
+            >
+              {languages.map(lang => (
+                <option key={lang.code} value={lang.code}>{lang.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Audio Controls */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setIsRecording(!isRecording)}
+              className={`p-2 border rounded ${isRecording ? 'bg-red-500 text-white' : 'bg-green-500 text-white'}`} // Basic button, replace later
+            >
+              {isRecording ? 'Stop Recording' : 'Start Recording'}
+            </button>
+            <button className="p-2 border rounded bg-blue-500 text-white">Upload Audio</button> {/* Placeholder */}
+          </div>
+
+          {/* Transcription Area */}
+          <div>
+            <label htmlFor="transcription-area" className="block text-sm font-medium mb-1">Transcription (Editable):</label>
+            <textarea
+              id="transcription-area"
+              rows={10}
+              value={transcription}
+              onChange={(e) => setTranscription(e.target.value)}
+              placeholder="Your transcription will appear here..."
+              className="w-full p-2 border rounded" // Basic textarea, replace later
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+          </div>
+        </section>
+
+        {/* Right Column: Generation & Download */}
+        <section className="flex flex-col gap-4 border rounded-lg p-4">
+          <h2 className="text-xl font-semibold mb-2">2. Generate & Download</h2>
+
+          {/* Document Type Selection */}
+          <div>
+            <p className="block text-sm font-medium mb-1">Select Document Type:</p>
+            <div className="flex flex-wrap gap-2">
+              {docTypes.map(type => (
+                <button
+                  key={type}
+                  onClick={() => setSelectedDocType(type)}
+                  className={`p-2 border rounded ${selectedDocType === type ? 'bg-primary text-primary-foreground' : 'bg-secondary'}`} // Basic button
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Generated Content Preview */}
+          <div>
+            <label htmlFor="preview-area" className="block text-sm font-medium mb-1">Preview:</label>
+            <div id="preview-area" className="w-full p-2 border rounded h-40 bg-muted overflow-auto">
+              {generatedContent || <span className="text-muted-foreground">Generated content will appear here...</span>}
+            </div>
+          </div>
+
+          {/* Output Format Selection */}
+          <div>
+            <p className="block text-sm font-medium mb-1">Select Output Format:</p>
+            <div className="flex flex-wrap gap-2">
+              {formats.map(format => (
+                <button
+                  key={format}
+                  onClick={() => setSelectedFormat(format)}
+                  className={`p-2 border rounded ${selectedFormat === format ? 'bg-primary text-primary-foreground' : 'bg-secondary'}`} // Basic button
+                >
+                  {format}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Download Button */}
+          <button
+            disabled={!generatedContent || !selectedFormat}
+            className="p-2 border rounded bg-blue-600 text-white disabled:opacity-50" // Basic button
           >
-            Read our docs
-          </a>
-        </div>
+            Download {selectedFormat}
+          </button>
+        </section>
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
+
+      <footer className="text-center text-sm text-muted-foreground mt-auto">
+        Powered by Next.js, Supabase, Gemini, and Google Cloud Speech.
       </footer>
     </div>
   );
