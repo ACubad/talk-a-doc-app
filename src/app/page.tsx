@@ -2,7 +2,7 @@
 
 "use client"; // Required for hooks like useState
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react'; // Import useRef
 import { useTranscription } from '@/hooks/useTranscription'; // Import the hook
 
 // Import Shadcn UI components
@@ -20,20 +20,52 @@ export default function Home() {
   const [selectedDocType, setSelectedDocType] = useState('');
   const [selectedFormat, setSelectedFormat] = useState('');
   const [generatedContent, setGeneratedContent] = useState('');
-  const [isLoading, setIsLoading] = useState(false); // Add loading state
+  const [isLoading, setIsLoading] = useState(false); // Loading state for generation
+  const [isDownloading, setIsDownloading] = useState(false); // Loading state for download
   const [apiError, setApiError] = useState<string | null>(null); // Add API error state
 
   // Use the transcription hook
   const {
-    isConnected,
+    // isConnected, // Removed
     isRecording,
     transcription,
-    interimTranscription,
+    // interimTranscription, // Removed
     error: transcriptionError,
+    isLoading: isTranscribing, // Renamed isLoading from hook
     startRecording,
     stopRecording,
     setTranscription, // Get the setter for manual edits
+    sendAudioToApi, // Get the function to send audio blobs
   } = useTranscription();
+
+  // Ref for the hidden file input
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Function to trigger file input click
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  // Function to handle file selection
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      console.log(`File selected: ${file.name}, size: ${file.size}, type: ${file.type}`);
+      // Basic validation (optional: add more specific types)
+      if (!file.type.startsWith('audio/')) {
+        setApiError('Invalid file type. Please upload an audio file.');
+        // Reset file input value so the same file can be selected again if needed
+        if (event.target) event.target.value = '';
+        return;
+      }
+      setApiError(null); // Clear previous errors
+      // Use the function from the hook to send the file
+      sendAudioToApi(file, selectedLanguage);
+      // Reset file input value so the same file can be selected again if needed
+      if (event.target) event.target.value = '';
+    }
+  };
+
 
   // Function to call the generate API
   const handleGenerateContent = async (docType: string) => {
@@ -68,6 +100,62 @@ export default function Home() {
       setApiError(error instanceof Error ? error.message : "An unknown error occurred during generation.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Function to handle download button click
+  const handleDownload = async () => {
+    if (!generatedContent || !selectedFormat) {
+      setApiError("No content generated or format selected for download.");
+      return;
+    }
+    setIsDownloading(true);
+    setApiError(null);
+
+    try {
+      const response = await fetch('/api/download', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          content: generatedContent,
+          format: selectedFormat,
+          docType: selectedDocType // Pass docType for context if needed (e.g., PPTX)
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Download request failed with status ${response.status}`);
+      }
+
+      // Trigger browser download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      // Extract filename from Content-Disposition header if possible, otherwise use default
+      const disposition = response.headers.get('Content-Disposition');
+      let filename = `generated_document.${selectedFormat.toLowerCase()}`; // Default filename
+      if (disposition && disposition.indexOf('attachment') !== -1) {
+          const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+          const matches = filenameRegex.exec(disposition);
+          if (matches != null && matches[1]) {
+            filename = matches[1].replace(/['"]/g, '');
+          }
+      }
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error("Download API error:", error);
+      setApiError(error instanceof Error ? error.message : "An unknown error occurred during download.");
+    } finally {
+      setIsDownloading(false);
     }
   };
 
@@ -112,10 +200,10 @@ export default function Home() {
               </Select>
             </div>
 
-            {/* Connection Status */}
-            <div className={`text-sm ${isConnected ? 'text-green-600' : 'text-red-600'}`}>
+            {/* Connection Status - Removed as WebSocket is gone */}
+            {/* <div className={`text-sm ${isConnected ? 'text-green-600' : 'text-red-600'}`}>
               WebSocket: {isConnected ? 'Connected' : 'Disconnected'}
-            </div>
+            </div> */}
 
             {/* Audio Controls */}
             <div className="flex gap-2">
@@ -124,16 +212,30 @@ export default function Home() {
                   if (isRecording) {
                     stopRecording();
                   } else {
-                    startRecording(selectedLanguage); // Pass selected language
+                    startRecording(); // No language argument needed now
                   }
                 }}
-                disabled={!isConnected} // Disable if not connected
+                // disabled={!isConnected} // Removed connection check
                 variant={isRecording ? "destructive" : "default"}
               >
                 {isRecording ? 'Stop Recording' : 'Start Recording'}
               </Button>
-              {/* TODO: Implement Upload Audio functionality */}
-              <Button variant="outline" disabled>Upload Audio</Button>
+              {/* File Input (Hidden) */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                style={{ display: 'none' }}
+                accept="audio/*" // Accept all audio types
+              />
+              {/* Upload Audio Button */}
+              <Button
+                variant="outline"
+                onClick={handleUploadClick}
+                disabled={isRecording || isTranscribing} // Disable while recording or processing
+              >
+                Upload Audio
+              </Button>
             </div>
 
             {/* Transcription Area */}
@@ -143,15 +245,16 @@ export default function Home() {
               <Textarea
                 id="transcription-area"
                 rows={10}
-                value={transcription + interimTranscription} // Show final + interim
-                onChange={(e) => setTranscription(e.target.value)} // Allow manual edits to the final part
-                placeholder="Your transcription will appear here..."
+                value={transcription} // Show only final transcription
+                onChange={(e) => setTranscription(e.target.value)} // Allow manual edits
+                placeholder={isTranscribing ? "Transcribing audio..." : (isRecording ? "Recording..." : "Your transcription will appear here after recording stops...")}
                 className="bg-muted"
+                readOnly={isRecording || isTranscribing} // Make read-only while recording/transcribing
               />
-              {interimTranscription && <p className="text-sm text-muted-foreground italic">Listening...</p>}
+              {/* Removed interim transcription indicator */}
             </div>
 
-            {/* Display Errors */}
+            {/* Display Transcription/Loading/Errors */}
             {transcriptionError && (
               <Alert variant="destructive">
                 <AlertTitle>Error</AlertTitle>
@@ -224,11 +327,12 @@ export default function Home() {
             </div>
 
             {/* Download Button */}
-            {/* TODO: Add download logic */}
             <Button
-              disabled={!generatedContent || !selectedFormat}
+              onClick={handleDownload}
+              disabled={!generatedContent || !selectedFormat || isDownloading || isLoading}
             >
-              Download {selectedFormat || '...'}
+              {/* TODO: Add loading indicator */}
+              {isDownloading ? 'Downloading...' : `Download ${selectedFormat || '...'}`}
             </Button>
           </CardContent>
         </Card>

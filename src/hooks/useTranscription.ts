@@ -1,155 +1,147 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 
-// Define the shape of messages received from the WebSocket server
-interface WebSocketMessage {
-  type: 'info' | 'transcript' | 'error';
-  message?: string;
-  text?: string;
-  isFinal?: boolean;
+// Define the shape of the API response
+interface TranscriptionResponse {
+  transcription?: string;
+  error?: string;
 }
 
-const WEBSOCKET_URL = `ws://localhost:${process.env.NEXT_PUBLIC_WS_PORT || 3001}`; // Use env var if set, else default
-
 export function useTranscription() {
-  const [isConnected, setIsConnected] = useState(false);
-  const [isRecording, setIsRecording] = useState(false); // Local recording state
+  // State variables
+  const [isRecording, setIsRecording] = useState(false);
   const [transcription, setTranscription] = useState('');
-  const [interimTranscription, setInterimTranscription] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false); // To indicate transcription processing
 
-  const ws = useRef<WebSocket | null>(null);
-  const audioContext = useRef<AudioContext | null>(null);
-  const processor = useRef<ScriptProcessorNode | null>(null);
-  const microphone = useRef<MediaStreamAudioSourceNode | null>(null);
+  // Refs for audio recording
+  const mediaRecorder = useRef<MediaRecorder | null>(null);
+  const audioChunks = useRef<Blob[]>([]);
   const mediaStream = useRef<MediaStream | null>(null);
 
-  // Function to connect to WebSocket server
-  const connectWebSocket = useCallback(() => {
-    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-      console.log('WebSocket already connected.');
-      return;
-    }
+  // Function to send audio blob to the API
+  const sendAudioToApi = useCallback(async (audioBlob: Blob, languageCode: string) => {
+    setIsLoading(true);
+    setError(null);
+    setTranscription(''); // Clear previous transcription
 
-    console.log(`Attempting to connect WebSocket to ${WEBSOCKET_URL}...`);
-    ws.current = new WebSocket(WEBSOCKET_URL);
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'recording.webm'); // Sending as webm, adjust if needed
+    formData.append('languageCode', languageCode);
 
-    ws.current.onopen = () => {
-      console.log('WebSocket Connected');
-      setIsConnected(true);
-      setError(null);
-    };
+    try {
+      const response = await fetch('/api/transcribe', { // New API endpoint
+        method: 'POST',
+        body: formData,
+      });
 
-    ws.current.onclose = (event) => {
-      console.log('WebSocket Disconnected:', event.reason, event.code);
-      setIsConnected(false);
-      setIsRecording(false); // Stop recording if connection drops
-      // Optionally attempt to reconnect here
-    };
+      const result: TranscriptionResponse = await response.json();
 
-    ws.current.onerror = (event) => {
-      console.error('WebSocket Error:', event);
-      setError('WebSocket connection error. Is the server running?');
-      setIsConnected(false);
-      setIsRecording(false);
-    };
-
-    ws.current.onmessage = (event) => {
-      try {
-        const data: WebSocketMessage = JSON.parse(event.data);
-        // console.log('Received WS message:', data); // Debugging
-
-        switch (data.type) {
-          case 'info':
-            console.log('Server Info:', data.message);
-            break;
-          case 'transcript':
-            if (data.text) {
-              if (data.isFinal) {
-                setTranscription(prev => prev + data.text + ' '); // Append final results
-                setInterimTranscription(''); // Clear interim
-              } else {
-                setInterimTranscription(data.text); // Update interim results
-              }
-            }
-            break;
-          case 'error':
-            console.error('Server Error:', data.message);
-            setError(`Server error: ${data.message}`);
-            // Consider stopping recording on server error
-            // stopRecording();
-            break;
-          default:
-            console.warn('Unknown message type:', data);
-        }
-      } catch (e) {
-        console.error('Failed to parse WebSocket message:', e);
+      if (!response.ok) {
+        throw new Error(result.error || `HTTP error! status: ${response.status}`);
       }
-    };
-  }, []);
 
-  // Function to disconnect WebSocket
-  const disconnectWebSocket = useCallback(() => {
-    if (ws.current) {
-      console.log('Disconnecting WebSocket...');
-      ws.current.close();
-      ws.current = null;
-      setIsConnected(false);
+      // Check for explicit error first
+      if (result.error) {
+         setError(`Transcription error: ${result.error}`);
+      // Check if transcription property exists (even if empty string)
+      } else if (typeof result.transcription === 'string') {
+         setTranscription(result.transcription); // Set state even if empty
+      } else {
+         // This case should ideally not happen if the API behaves as expected
+         setError('Transcription failed: Unexpected response format.');
+      }
+    } catch (err) {
+      console.error('Error sending audio to API:', err);
+      setError(`API request failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
-  // Start recording audio and sending to WebSocket
-  const startRecording = useCallback(async (languageCode: string) => {
-    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
-      setError('WebSocket not connected. Cannot start recording.');
-      console.error('WebSocket not connected.');
-      return;
-    }
+  // Start recording audio
+  const startRecording = useCallback(async () => {
     if (isRecording) {
       console.log('Already recording.');
       return;
     }
 
-    setTranscription(''); // Clear previous full transcription
-    setInterimTranscription(''); // Clear previous interim transcription
+    setTranscription(''); // Clear previous transcription
     setError(null);
+    audioChunks.current = []; // Clear previous audio chunks
 
     try {
       // Get microphone access
       mediaStream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      // Create audio processing context and nodes
-      audioContext.current = new window.AudioContext();
-      const sampleRate = audioContext.current.sampleRate;
-      console.log(`AudioContext sample rate: ${sampleRate}`);
-      // Note: Google Speech API might prefer 16000Hz. Resampling might be needed.
-      // For simplicity now, we use the browser's default. Adjust server config if needed.
+      // --- MediaRecorder Setup ---
+      // Determine supported MIME type
+      const options = { mimeType: 'audio/webm' }; // Prefer webm
+      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+        console.warn(`${options.mimeType} not supported, trying default.`);
+        // Let the browser choose the default mimeType
+        mediaRecorder.current = new MediaRecorder(mediaStream.current);
+      } else {
+        mediaRecorder.current = new MediaRecorder(mediaStream.current, options);
+      }
 
-      microphone.current = audioContext.current.createMediaStreamSource(mediaStream.current);
-
-      // Using ScriptProcessorNode (older but widely compatible)
-      // Buffer size influences latency and processing chunks
-      const bufferSize = 4096;
-      processor.current = audioContext.current.createScriptProcessor(bufferSize, 1, 1);
-
-      processor.current.onaudioprocess = (event) => {
-        if (!isRecording || !ws.current || ws.current.readyState !== WebSocket.OPEN) return;
-
-        const inputData = event.inputBuffer.getChannelData(0);
-        // Convert Float32Array to Int16Array (LINEAR16)
-        const buffer = new Int16Array(inputData.length);
-        for (let i = 0; i < inputData.length; i++) {
-            buffer[i] = Math.max(-1, Math.min(1, inputData[i])) * 0x7FFF; // Scale to 16-bit PCM
+      mediaRecorder.current.ondataavailable = (event) => {
+        console.log(`ondataavailable event fired. Data size: ${event.data.size}`); // Log data event
+        if (event.data.size > 0) {
+          audioChunks.current.push(event.data);
         }
-        ws.current.send(buffer.buffer); // Send ArrayBuffer
       };
 
-      microphone.current.connect(processor.current);
-      processor.current.connect(audioContext.current.destination); // Connect to output (needed for onaudioprocess to fire)
+      mediaRecorder.current.onstop = () => {
+        console.log('>>> MediaRecorder onstop event triggered.'); // Log stop event start
+        console.log(`   Number of audio chunks recorded: ${audioChunks.current.length}`); // Log chunk count
+        // Check if any audio data was captured
+        if (audioChunks.current.length === 0) {
+            console.warn('   No audio data captured (audioChunks is empty). Setting error.'); // Log empty chunk case
+            setError('No audio data was recorded. Please try recording for a longer duration.');
+            setIsLoading(false); // Ensure loading state is reset
+             // Clean up stream tracks even if no data
+            if (mediaStream.current) {
+                console.log('   Cleaning up media stream tracks (no data).');
+                mediaStream.current.getTracks().forEach(track => track.stop());
+                mediaStream.current = null;
+            }
+            return; // Don't proceed if no data
+        }
 
-      // Send start message to server
-      ws.current.send(JSON.stringify({ command: 'start_stream', languageCode: languageCode })); // Send language
+        // Combine chunks into a single Blob
+        const audioBlob = new Blob(audioChunks.current, { type: mediaRecorder.current?.mimeType || 'audio/webm' });
+        console.log(`   Recorded Blob size: ${audioBlob.size}, type: ${audioBlob.type}`);
+        // TODO: Get language code from UI state when calling stopRecording or here
+        const languageCode = 'en-US'; // Hardcoded for now - Get from state in page.tsx
+        console.log(`   Sending audio blob to API with language: ${languageCode}`);
+        sendAudioToApi(audioBlob, languageCode);
+        // Clean up stream tracks after stopping and processing
+        if (mediaStream.current) {
+            console.log('   Cleaning up media stream tracks (after processing).');
+            mediaStream.current.getTracks().forEach(track => track.stop());
+            mediaStream.current = null;
+        }
+        console.log('<<< MediaRecorder onstop event finished.'); // Log stop event end
+      };
+
+      mediaRecorder.current.onerror = (event) => {
+        console.error('!!! MediaRecorder Error Event:', event); // Log error event
+        setError(`MediaRecorder error: ${event instanceof Error ? event.message : 'Unknown error'}`);
+        setIsRecording(false);
+        // Clean up stream tracks on error
+        if (mediaStream.current) {
+            console.log('   Cleaning up media stream tracks (onerror).');
+            mediaStream.current.getTracks().forEach(track => track.stop());
+            mediaStream.current = null;
+        }
+      };
+
+      console.log('Attempting to start MediaRecorder...'); // Log before start
+      mediaRecorder.current.start(); // Start recording without timeslice
+      // --- End MediaRecorder Setup ---
+
       setIsRecording(true);
-      console.log('Recording started');
+      console.log('Recording started successfully with MediaRecorder.'); // Confirm start call completed
 
     } catch (err) {
       console.error('Error starting recording:', err);
@@ -160,75 +152,53 @@ export function useTranscription() {
         mediaStream.current.getTracks().forEach(track => track.stop());
         mediaStream.current = null;
       }
-      if (audioContext.current) {
-        audioContext.current.close();
-        audioContext.current = null;
-      }
     }
-  }, [isRecording]); // Add isRecording dependency
+  }, [isRecording, sendAudioToApi]); // Added dependencies
 
   // Stop recording audio
   const stopRecording = useCallback(() => {
-    if (!isRecording) return;
-
-    console.log('Stopping recording...');
-    setIsRecording(false);
-
-    // Stop microphone tracks
-    if (mediaStream.current) {
-      mediaStream.current.getTracks().forEach(track => track.stop());
-      mediaStream.current = null;
+    // Check the actual recorder state instead of the React state
+    if (!mediaRecorder.current || mediaRecorder.current.state !== 'recording') {
+        console.log(`stopRecording called but recorder not active. State: ${mediaRecorder.current?.state}`);
+        return;
     }
 
-    // Disconnect audio nodes
-    if (processor.current) {
-      processor.current.disconnect();
-      processor.current = null;
-    }
-    if (microphone.current) {
-      microphone.current.disconnect();
-      microphone.current = null;
-    }
+  console.log(`>>> Calling mediaRecorder.stop(). Current state: ${mediaRecorder.current.state}`); // Log state before stopping
+  // Stop the recorder *before* updating the state
+  mediaRecorder.current.stop(); // This triggers the 'onstop' event where audio is processed
+  setIsRecording(false); // Update state after stopping
+  // Stream tracks are stopped in the 'onstop' handler now
+  console.log('<<< mediaRecorder.stop() called.'); // Log stop call completion
 
-    // Close AudioContext
-    if (audioContext.current && audioContext.current.state !== 'closed') {
-      audioContext.current.close();
-      audioContext.current = null;
-    }
+  }, [isRecording]); // Add isRecording dependency back
 
-    // Send end message to server
-    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-      ws.current.send(JSON.stringify({ command: 'end_stream' }));
-    }
-    console.log('Recording stopped.');
-  }, [isRecording]); // Add isRecording dependency
-
-  // Effect to connect WebSocket on mount and disconnect on unmount
+  // Effect for cleanup on unmount
   useEffect(() => {
-    connectWebSocket();
     return () => {
-      stopRecording(); // Ensure recording stops on unmount
-      disconnectWebSocket();
-    };
-  }, [connectWebSocket, disconnectWebSocket, stopRecording]);
-
-  // Effect to stop recording if connection drops
-  useEffect(() => {
-      if (!isConnected && isRecording) {
-          console.log("WebSocket disconnected while recording, stopping recording.");
-          stopRecording();
+      console.log('Cleanup effect running on unmount or state change.');
+      if (isRecording) {
+        console.log('   Component unmounting/changing while recording. Stopping recording.');
+        stopRecording(); // Ensure recording stops on unmount
       }
-  }, [isConnected, isRecording, stopRecording]);
+      // Ensure any lingering stream tracks are stopped
+      if (mediaStream.current) {
+        console.log('   Cleaning up lingering media stream tracks in cleanup effect.');
+        mediaStream.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  // Use an empty dependency array to ensure cleanup only runs on unmount.
+  // }, []); // Let's include stopRecording in dependencies for safety, though it might cause re-renders if not stable. Revert if problematic.
+  }, [stopRecording]);
 
 
   return {
-    isConnected,
     isRecording,
     transcription,
-    interimTranscription,
     error,
+    isLoading, // Expose loading state (used as isTranscribing in page)
     startRecording,
     stopRecording,
     setTranscription, // Allow manual edits
+    sendAudioToApi, // Expose the function to send audio blobs
   };
 }
