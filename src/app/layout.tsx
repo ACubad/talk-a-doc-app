@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { Sidebar, SidebarBody, SidebarLink } from "../components/sidebar";
+import { Home, Settings } from "lucide-react";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -24,10 +26,30 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <Sidebar>
+          <div className="flex h-screen">
+            <SidebarBody className="border-r border-neutral-200 dark:border-neutral-700 flex-shrink-0">
+              {/* Placeholder Links */}
+              <SidebarLink
+                link={{
+                  label: "Home",
+                  href: "/",
+                  icon: <Home className="w-4 h-4" />,
+                }}
+              />
+              <SidebarLink
+                link={{
+                  label: "Settings",
+                  href: "/settings", // Example path
+                  icon: <Settings className="w-4 h-4" />,
+                }}
+              />
+            </SidebarBody>
+            {/* Main Content Area */}
+            <main className="flex-1 overflow-y-auto">{children}</main>
+          </div>
+        </Sidebar>
       </body>
     </html>
   );
