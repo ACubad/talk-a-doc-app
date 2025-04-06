@@ -285,6 +285,21 @@ export default function Home() {
              <CardTitle>2. Generate & Download</CardTitle>
            </CardHeader>
            <CardContent className="flex flex-col gap-4">
+             {/* Output Language Selection */}
+             <div className="grid w-full max-w-sm items-center gap-1.5">
+               <Label htmlFor="output-language-select">Select Output Language</Label>
+               <Select value={outputLanguage} onValueChange={setOutputLanguage}>
+                 <SelectTrigger id="output-language-select" className="w-full">
+                   <SelectValue placeholder="Select language..." />
+                 </SelectTrigger>
+                 <SelectContent>
+                   {outputLanguages.map(lang => (
+                     <SelectItem key={lang.code} value={lang.code}>{lang.name}</SelectItem>
+                   ))}
+                 </SelectContent>
+               </Select>
+             </div>
+
             {/* Document Type Selection */}
             <div className="grid w-full gap-1.5">
               <Label>Select Document Type</Label>
@@ -304,21 +319,6 @@ export default function Home() {
                 ))}
               </div>
             </div>
-
-             {/* Output Language Selection */}
-             <div className="grid w-full max-w-sm items-center gap-1.5">
-               <Label htmlFor="output-language-select">Select Output Language</Label>
-               <Select value={outputLanguage} onValueChange={setOutputLanguage}>
-                 <SelectTrigger id="output-language-select" className="w-full">
-                   <SelectValue placeholder="Select language..." />
-                 </SelectTrigger>
-                 <SelectContent>
-                   {outputLanguages.map(lang => (
-                     <SelectItem key={lang.code} value={lang.code}>{lang.name}</SelectItem>
-                   ))}
-                 </SelectContent>
-               </Select>
-             </div>
 
             {/* Generated Content Preview */}
             <div className="grid w-full gap-1.5">
