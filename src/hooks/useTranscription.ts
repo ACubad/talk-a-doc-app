@@ -137,7 +137,7 @@ export function useTranscription() {
       };
 
       console.log('Attempting to start MediaRecorder...'); // Log before start
-      mediaRecorder.current.start(); // Start recording without timeslice
+      mediaRecorder.current.start(1000); // Start recording with 1-second timeslice
       // --- End MediaRecorder Setup ---
 
       setIsRecording(true);
@@ -187,8 +187,7 @@ export function useTranscription() {
       }
     };
   // Use an empty dependency array to ensure cleanup only runs on unmount.
-  // }, []); // Let's include stopRecording in dependencies for safety, though it might cause re-renders if not stable. Revert if problematic.
-  }, [stopRecording]);
+  }, []);
 
 
   return {
