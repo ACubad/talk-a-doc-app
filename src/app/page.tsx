@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react"; // Import Loader2
+import RichTextPreviewEditor from '@/components/RichTextPreviewEditor'; // Import the new editor
 
 export default function Home() {
   const [selectedLanguage, setSelectedLanguage] = useState('en-US'); // Input language
@@ -276,29 +277,23 @@ export default function Home() {
                 </AlertDescription>
               </Alert>
             )}
-          </CardContent>
-        </Card>
 
-        {/* Right Column: Generation & Download */}
-        <Card>
-           <CardHeader>
-             <CardTitle>2. Generate & Download</CardTitle>
-           </CardHeader>
-           <CardContent className="flex flex-col gap-4">
-             {/* Output Language Selection */}
-             <div className="grid w-full max-w-sm items-center gap-1.5">
-               <Label htmlFor="output-language-select">Select Output Language</Label>
-               <Select value={outputLanguage} onValueChange={setOutputLanguage}>
-                 <SelectTrigger id="output-language-select" className="w-full">
-                   <SelectValue placeholder="Select language..." />
-                 </SelectTrigger>
-                 <SelectContent>
-                   {outputLanguages.map(lang => (
-                     <SelectItem key={lang.code} value={lang.code}>{lang.name}</SelectItem>
-                   ))}
-                 </SelectContent>
-               </Select>
-             </div>
+            {/* --- MOVED GENERATION CONTROLS START --- */}
+
+            {/* Output Language Selection */}
+            <div className="grid w-full max-w-sm items-center gap-1.5 pt-4 border-t mt-4"> {/* Added padding/border */}
+              <Label htmlFor="output-language-select">Select Output Language</Label>
+              <Select value={outputLanguage} onValueChange={setOutputLanguage}>
+                <SelectTrigger id="output-language-select" className="w-full">
+                  <SelectValue placeholder="Select language..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {outputLanguages.map(lang => (
+                    <SelectItem key={lang.code} value={lang.code}>{lang.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
             {/* Document Type Selection */}
             <div className="grid w-full gap-1.5">
@@ -320,57 +315,70 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Generated Content Preview */}
-            <div className="grid w-full gap-1.5">
-              <Label htmlFor="preview-area">Preview {isLoading ? '(Generating...)' : ''}</Label>
-              <ScrollArea className={`h-40 w-full rounded-md border p-3 bg-muted ${isLoading ? 'opacity-50 animate-pulse' : ''}`}>
-                 {generatedContent ? (
-                   <div dangerouslySetInnerHTML={{ __html: generatedContent }} />
-                 ) : (
-                   <span className="text-muted-foreground">Select a document type above to generate content...</span>
-                 )}
-               </ScrollArea>
-            </div>
+            {/* Display API Errors (Moved here) */}
+            {apiError && (
+              <Alert variant="destructive">
+                <AlertTitle>Error</AlertTitle> {/* Generic Error Title */}
+                <AlertDescription>
+                  {apiError}
+                </AlertDescription>
+              </Alert>
+            )}
 
-             {/* Display API Errors */}
-             {apiError && (
-               <Alert variant="destructive">
-                 <AlertTitle>Generation Error</AlertTitle>
-                 <AlertDescription>
-                   {apiError}
-                 </AlertDescription>
-               </Alert>
-             )}
+            {/* --- MOVED GENERATION CONTROLS END --- */}
 
-            {/* Output Format Selection */}
-            {/* TODO: Add API call to generate content on doc type selection */}
-            <div className="grid w-full gap-1.5">
-              <Label>Select Output Format</Label>
-              <div className="flex flex-wrap gap-2">
-                {formats.map(format => (
-                  <Button
-                    key={format}
-                    variant={selectedFormat === format ? "default" : "secondary"}
-                    onClick={() => setSelectedFormat(format)}
-                    className="transition-colors duration-200" // Add transition
-                  >
-                    {format}
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            {/* Download Button */}
-            <Button
-              onClick={handleDownload}
-              disabled={!generatedContent || !selectedFormat || isDownloading || isLoading}
-              className="transition-colors duration-200" // Add transition
-            >
-              {isDownloading ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Downloading...</>
-              ) : `Download ${selectedFormat || '...'}`}
-            </Button>
           </CardContent>
+        </Card>
+
+        {/* Right Column: Preview */}
+        <Card>
+           <CardHeader>
+             <CardTitle>2. Preview</CardTitle> {/* Changed Title */}
+           </CardHeader>
+           <CardContent className="flex flex-col gap-4">
+             {/* Rich Text Editor Preview */}
+             <div className="grid w-full gap-1.5">
+               <Label htmlFor="preview-area">Preview (Editable) {isLoading ? '(Generating...)' : ''}</Label>
+               <RichTextPreviewEditor
+                 value={generatedContent}
+                 onChange={setGeneratedContent} // Update state directly from editor
+               />
+               {/* Placeholder/Loading Text - Handled within the editor component now */}
+             </div>
+
+             {/* --- MOVED OUTPUT/DOWNLOAD CONTROLS START --- */}
+
+             {/* Output Format Selection */}
+             <div className="grid w-full gap-1.5 pt-4 border-t mt-4"> {/* Added padding/border */}
+               <Label>Select Output Format</Label>
+               <div className="flex flex-wrap gap-2">
+                 {formats.map(format => (
+                   <Button
+                     key={format}
+                     variant={selectedFormat === format ? "default" : "secondary"}
+                     onClick={() => setSelectedFormat(format)}
+                     className="transition-colors duration-200" // Add transition
+                   >
+                     {format}
+                   </Button>
+                 ))}
+               </div>
+             </div>
+
+             {/* Download Button */}
+             <Button
+               onClick={handleDownload}
+               disabled={!generatedContent || !selectedFormat || isDownloading || isLoading}
+               className="transition-colors duration-200 w-full" // Add transition, make full width
+             >
+               {isDownloading ? (
+                 <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Downloading...</>
+               ) : `Download ${selectedFormat || '...'}`}
+             </Button>
+
+             {/* --- MOVED OUTPUT/DOWNLOAD CONTROLS END --- */}
+
+           </CardContent>
         </Card>
       </main>
 
