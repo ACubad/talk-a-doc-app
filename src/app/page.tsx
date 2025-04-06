@@ -13,12 +13,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 // import { Badge } from "@/components/ui/badge"; // Not used yet
+// TODO: Add Loader2 for loading state later: import { Loader2 } from "lucide-react";
 
 export default function Home() {
   const [selectedLanguage, setSelectedLanguage] = useState('en-US'); // Default to US English
   const [selectedDocType, setSelectedDocType] = useState('');
   const [selectedFormat, setSelectedFormat] = useState('');
   const [generatedContent, setGeneratedContent] = useState('');
+  const [isLoading, setIsLoading] = useState(false); // Add loading state
+  const [apiError, setApiError] = useState<string | null>(null); // Add API error state
 
   // Use the transcription hook
   const {
@@ -31,6 +34,43 @@ export default function Home() {
     stopRecording,
     setTranscription, // Get the setter for manual edits
   } = useTranscription();
+
+  // Function to call the generate API
+  const handleGenerateContent = async (docType: string) => {
+    if (!transcription) {
+      setApiError("Please provide transcription text first.");
+      return;
+    }
+    setIsLoading(true);
+    setApiError(null);
+    setGeneratedContent(''); // Clear previous content
+    setSelectedDocType(docType); // Set the selected type
+
+    try {
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ transcription, docType }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `API request failed with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      setGeneratedContent(data.generatedContent);
+
+    } catch (error) {
+      console.error("Generation API error:", error);
+      setApiError(error instanceof Error ? error.message : "An unknown error occurred during generation.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
 
   const languages = [
     { code: 'en-US', name: 'English (US)' },
@@ -137,9 +177,11 @@ export default function Home() {
                   <Button
                     key={type}
                     variant={selectedDocType === type ? "default" : "secondary"}
-                    onClick={() => setSelectedDocType(type)}
+                    onClick={() => handleGenerateContent(type)} // Call API on click
+                    disabled={isLoading || !transcription} // Disable while loading or if no transcription
                   >
-                    {type}
+                    {/* TODO: Add loading indicator */}
+                    {isLoading && selectedDocType === type ? 'Generating...' : type}
                   </Button>
                 ))}
               </div>
@@ -147,12 +189,22 @@ export default function Home() {
 
             {/* Generated Content Preview */}
             <div className="grid w-full gap-1.5">
-              <Label htmlFor="preview-area">Preview</Label>
+              <Label htmlFor="preview-area">Preview {isLoading ? '(Generating...)' : ''}</Label>
               {/* TODO: Replace with Shadcn ScrollArea or similar */}
-              <div id="preview-area" className="w-full p-3 border rounded h-40 bg-muted overflow-auto text-sm">
-                {generatedContent || <span className="text-muted-foreground">Generated content will appear here...</span>}
+              <div id="preview-area" className={`w-full p-3 border rounded h-40 bg-muted overflow-auto text-sm ${isLoading ? 'opacity-50' : ''}`}>
+                {generatedContent || <span className="text-muted-foreground">Select a document type above to generate content...</span>}
               </div>
             </div>
+
+             {/* Display API Errors */}
+             {apiError && (
+               <Alert variant="destructive">
+                 <AlertTitle>Generation Error</AlertTitle>
+                 <AlertDescription>
+                   {apiError}
+                 </AlertDescription>
+               </Alert>
+             )}
 
             {/* Output Format Selection */}
             {/* TODO: Add API call to generate content on doc type selection */}
