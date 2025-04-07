@@ -10,13 +10,13 @@ interface GenerateRequestBody {
 
 // Define prompts for different document types, requesting HTML output
 const prompts = {
-  Report: (text: string, language: string) => `Generate a formal report in ${language} based on the following text. Use simple HTML tags for formatting (like <b> for bold, <i> for italic, <p> for paragraphs, <ul> and <li> for lists). Do NOT use Markdown syntax like ** or *:\n\n---\n${text}\n---`,
-  Email: (text: string, language: string) => `Format the following text as a professional email in ${language}. Infer necessary components like subject, greeting, and closing if possible. Use simple HTML tags for formatting (like <b> for bold, <i> for italic, <p> for paragraphs). Do NOT use Markdown syntax like ** or *:\n\n---\n${text}\n---`,
+  Report: (text: string, language: string) => `Generate a comprehensive and detailed formal report in ${language} based on the following text. Ensure the report covers all key aspects mentioned. Use simple HTML tags for formatting (like <b> for bold, <i> for italic, <p> for paragraphs, <ul> and <li> for lists). Do NOT use Markdown syntax like ** or *:\n\n---\n${text}\n---`,
+  Email: (text: string, language: string) => `Format the following text as a comprehensive and professional email in ${language}. Ensure all relevant points are included and elaborated upon where appropriate. Infer necessary components like subject, greeting, and closing if possible. Use simple HTML tags for formatting (like <b> for bold, <i> for italic, <p> for paragraphs). Do NOT use Markdown syntax like ** or *:\n\n---\n${text}\n---`,
   // Excel/CSV should remain plain text, but specify language for content extraction context
-  Excel: (text: string, language: string) => `Extract structured data suitable for a CSV/Excel sheet from the following text (which is in ${language}). Present it clearly as plain text, perhaps as key-value pairs, a list of items, or a simple table structure. Do NOT use HTML or Markdown:\n\n---\n${text}\n---`,
+  Excel: (text: string, language: string) => `Extract comprehensive structured data suitable for a CSV/Excel sheet from the following text (which is in ${language}). Ensure all relevant data points are captured. Present it clearly as plain text, perhaps as key-value pairs, a list of items, or a simple table structure. Do NOT use HTML or Markdown:\n\n---\n${text}\n---`,
   // PowerPoint should be concise points, specify language
-  PowerPoint: (text: string, language: string) => `Generate concise bullet points in ${language} suitable for a PowerPoint presentation summarizing the key information in the following text. Use simple HTML tags for formatting if necessary (<b>, <i>). Do NOT use Markdown syntax like ** or *:\n\n---\n${text}\n---`,
-  Default: (text: string, language: string) => `Process the following text (in ${language}). Use simple HTML tags for formatting if appropriate. Do NOT use Markdown syntax like ** or *:\n\n---\n${text}\n---`,
+  PowerPoint: (text: string, language: string) => `Generate comprehensive and detailed bullet points in ${language} suitable for a PowerPoint presentation, summarizing all key information and supporting details from the following text. Use simple HTML tags for formatting if necessary (<b>, <i>). Do NOT use Markdown syntax like ** or *:\n\n---\n${text}\n---`,
+  Default: (text: string, language: string) => `Process the following text (in ${language}) comprehensively. Use simple HTML tags for formatting if appropriate. Do NOT use Markdown syntax like ** or *:\n\n---\n${text}\n---`,
 };
 
 export async function POST(request: Request) {
