@@ -22,10 +22,8 @@ This file tracks the progress of the Talk A Doc application development.
 Use Markdown checkboxes (`- [ ]` for incomplete, `- [x]` for complete) to track progress.
 
 - [ ] **Refine Existing Features:**
-    - [ ] Improve transcription accuracy/robustness.
     - [ ] Enhance content generation quality/consistency.
         - [ ] Refine prompts to request more comprehensive output based on transcription.
-    - [ ] Improve download format fidelity (especially PPTX/DOCX).
     - [ ] Refine UI/UX based on feedback.
         - [ ] Center icons in collapsed sidebar.
         - [ ] Ensure smooth text collapse in sidebar without pre-collapse visual changes.

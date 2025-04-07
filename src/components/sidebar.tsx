@@ -306,7 +306,8 @@ export const SidebarLink = ({
     <Link
       href={link.href}
       className={cn(
-        "flex items-center justify-start gap-2 group/sidebar py-2",
+        "flex items-center gap-2 group/sidebar py-2",
+        open ? "justify-start" : "justify-center", // Conditionally center icon when collapsed
         className
       )}
       {...props}
