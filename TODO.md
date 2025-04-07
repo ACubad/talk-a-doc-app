@@ -25,7 +25,7 @@ Use Markdown checkboxes (`- [ ]` for incomplete, `- [x]` for complete) to track 
     - [ ] Enhance content generation quality/consistency.
         - [ ] Refine prompts to request more comprehensive output based on transcription.
     - [ ] Refine UI/UX based on feedback.
-        - [ ] Center icons in collapsed sidebar.
+        - [x] Center icons in collapsed sidebar.
         - [ ] Ensure smooth text collapse in sidebar without pre-collapse visual changes.
         - [ ] Add UI element (e.g., '+' icon) to allow adding multiple audio inputs before final generation.
     - [ ] Add more comprehensive error handling and reporting.
