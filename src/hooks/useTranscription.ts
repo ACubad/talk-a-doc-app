@@ -6,23 +6,43 @@ interface TranscriptionResponse {
   error?: string;
 }
 
+// Interface for a single transcription item
+interface TranscriptionItem {
+  id: string; // Unique identifier
+  text: string;
+  isLoading: boolean;
+  error: string | null;
+  // audioBlob?: Blob; // Optional: Store the blob if needed later
+}
+
 export function useTranscription() {
   // State variables
   const [isRecording, setIsRecording] = useState(false);
-  const [transcription, setTranscription] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false); // To indicate transcription processing
+  // Replace single string state with an array of items
+  const [transcriptions, setTranscriptions] = useState<TranscriptionItem[]>([]);
+  const [error, setError] = useState<string | null>(null); // Keep top-level error for now? Maybe move into items?
+  const [isLoading, setIsLoading] = useState(false); // Keep top-level loading for now? Maybe move into items?
 
   // Refs for audio recording
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const audioChunks = useRef<Blob[]>([]);
   const mediaStream = useRef<MediaStream | null>(null);
 
-  // Function to send audio blob to the API
+  // Helper to generate simple IDs (replace with uuid later if needed)
+  const generateId = () => Date.now().toString();
+
+  // Function to send audio blob to the API - Modified for array state
   const sendAudioToApi = useCallback(async (audioBlob: Blob, languageCode: string) => {
-    setIsLoading(true);
-    setError(null);
-    setTranscription(''); // Clear previous transcription
+    const itemId = generateId();
+
+    // Add a placeholder item to the state immediately
+    setTranscriptions(prev => [
+      ...prev,
+      { id: itemId, text: '', isLoading: true, error: null }
+    ]);
+
+    // setError(null); // Clear top-level error? Or handle per item?
+    // setIsLoading(true); // Handled per item now
 
     const formData = new FormData();
     formData.append('audio', audioBlob, 'recording.webm'); // Sending as webm, adjust if needed
@@ -40,23 +60,33 @@ export function useTranscription() {
         throw new Error(result.error || `HTTP error! status: ${response.status}`);
       }
 
-      // Check for explicit error first
+      // Update the specific item in the state based on the result
       if (result.error) {
-         setError(`Transcription error: ${result.error}`);
-      // Check if transcription property exists (even if empty string)
-      } else if (typeof result.transcription === 'string') {
-         setTranscription(result.transcription); // Set state even if empty
+        setTranscriptions(prev => prev.map(item =>
+          item.id === itemId ? { ...item, isLoading: false, error: `Transcription error: ${result.error}` } : item
+        ));
+      // Ensure text is always a string, default to empty if undefined
+      } else if (typeof result.transcription === 'string' || result.transcription === undefined) {
+        setTranscriptions(prev => prev.map(item =>
+          item.id === itemId ? { ...item, isLoading: false, text: result.transcription || '' } : item
+        ));
       } else {
-         // This case should ideally not happen if the API behaves as expected
-         setError('Transcription failed: Unexpected response format.');
+        setTranscriptions(prev => prev.map(item =>
+          item.id === itemId ? { ...item, isLoading: false, error: 'Transcription failed: Unexpected response format.' } : item
+        ));
       }
     } catch (err) {
       console.error('Error sending audio to API:', err);
-      setError(`API request failed: ${err instanceof Error ? err.message : String(err)}`);
+      // Update the specific item with the error
+      setTranscriptions(prev => prev.map(item =>
+        item.id === itemId ? { ...item, isLoading: false, error: `API request failed: ${err instanceof Error ? err.message : String(err)}` } : item
+      ));
+      // setError(`API request failed: ${err instanceof Error ? err.message : String(err)}`); // Keep top-level error?
     } finally {
-      setIsLoading(false);
+      // setIsLoading(false); // Loading is per-item now
     }
-  }, []);
+    // Dependency array: Include setTranscriptions
+  }, [setTranscriptions]);
 
   // Start recording audio
   const startRecording = useCallback(async () => {
@@ -65,9 +95,14 @@ export function useTranscription() {
       return;
     }
 
-    setTranscription(''); // Clear previous transcription
-    setError(null);
-    audioChunks.current = []; // Clear previous audio chunks
+    const recordingId = generateId(); // Generate ID for this recording
+    // Add placeholder for the new recording
+    setTranscriptions(prev => [
+      ...prev,
+      { id: recordingId, text: 'Recording...', isLoading: true, error: null }
+    ]);
+    // setError(null); // Clear top-level error?
+    audioChunks.current = []; // Clear previous audio chunks for the new recording
 
     try {
       // Get microphone access
@@ -111,10 +146,45 @@ export function useTranscription() {
         // Combine chunks into a single Blob
         const audioBlob = new Blob(audioChunks.current, { type: mediaRecorder.current?.mimeType || 'audio/webm' });
         console.log(`   Recorded Blob size: ${audioBlob.size}, type: ${audioBlob.type}`);
-        // TODO: Get language code from UI state when calling stopRecording or here
-        const languageCode = 'en-US'; // Hardcoded for now - Get from state in page.tsx
-        console.log(`   Sending audio blob to API with language: ${languageCode}`);
-        sendAudioToApi(audioBlob, languageCode);
+        // TODO: Get language code from UI state
+        const languageCode = 'en-US'; // Hardcoded for now
+        console.log(`   Processing recorded audio blob for item ID: ${recordingId} with language: ${languageCode}`);
+
+        // --- Directly process the blob and update the state for recordingId ---
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'recording.webm');
+        formData.append('languageCode', languageCode);
+
+        fetch('/api/transcribe', { method: 'POST', body: formData })
+          .then(response => {
+            if (!response.ok) {
+              return response.json().then(err => { throw new Error(err.error || `HTTP error! status: ${response.status}`) });
+            }
+            return response.json();
+          })
+          .then((result: TranscriptionResponse) => {
+            if (result.error) {
+              setTranscriptions(prev => prev.map(item =>
+                item.id === recordingId ? { ...item, isLoading: false, error: `Transcription error: ${result.error}` } : item
+              ));
+            } else if (typeof result.transcription === 'string' || result.transcription === undefined) {
+              setTranscriptions(prev => prev.map(item =>
+                item.id === recordingId ? { ...item, isLoading: false, text: result.transcription || '' } : item
+              ));
+            } else {
+               setTranscriptions(prev => prev.map(item =>
+                 item.id === recordingId ? { ...item, isLoading: false, error: 'Transcription failed: Unexpected response format.' } : item
+               ));
+            }
+          })
+          .catch(err => {
+            console.error('Error processing recorded audio:', err);
+            setTranscriptions(prev => prev.map(item =>
+              item.id === recordingId ? { ...item, isLoading: false, error: `Processing failed: ${err instanceof Error ? err.message : String(err)}` } : item
+            ));
+          });
+        // --- End direct processing ---
+
         // Clean up stream tracks after stopping and processing
         if (mediaStream.current) {
             console.log('   Cleaning up media stream tracks (after processing).');
@@ -190,14 +260,20 @@ export function useTranscription() {
   }, []);
 
 
+  // TODO: Implement a function to update a specific transcription item's text
+  // const updateTranscriptionText = useCallback((id: string, newText: string) => {
+  //   setTranscriptions(prev => prev.map(item => item.id === id ? { ...item, text: newText } : item));
+  // }, [setTranscriptions]);
+
   return {
     isRecording,
-    transcription,
-    error,
-    isLoading, // Expose loading state (used as isTranscribing in page)
+    transcriptions, // Return the array
+    error, // Keep top-level error for now
+    isLoading, // Keep top-level loading for now
     startRecording,
     stopRecording,
-    setTranscription, // Allow manual edits
+    // setTranscription, // Remove old setter for now
+    // updateTranscriptionText, // Expose new setter later
     sendAudioToApi, // Expose the function to send audio blobs
   };
 }

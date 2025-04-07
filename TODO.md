@@ -27,7 +27,7 @@ Use Markdown checkboxes (`- [ ]` for incomplete, `- [x]` for complete) to track 
     - [ ] Refine UI/UX based on feedback.
         - [x] Center icons in collapsed sidebar.
         - [x] Ensure smooth text collapse in sidebar without pre-collapse visual changes.
-        - [ ] Add UI element (e.g., '+' icon) to allow adding multiple audio inputs before final generation.
+        - [x] Add UI element (e.g., '+' icon) to allow adding multiple audio inputs before final generation.
     - [ ] Add more comprehensive error handling and reporting.
 - [ ] **Implement Sidebar Functionality:**
     - [ ] Define and implement actions for each sidebar item (currently placeholders).

@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
-import { Loader2 } from "lucide-react"; // Import Loader2
+import { Loader2, Plus } from "lucide-react"; // Import Loader2 and Plus
 import RichTextPreviewEditor from '@/components/RichTextPreviewEditor'; // Import the new editor
 
 export default function Home() {
@@ -30,15 +30,18 @@ export default function Home() {
   const {
     // isConnected, // Removed
     isRecording,
-    transcription,
+    transcriptions, // Changed from transcription
     // interimTranscription, // Removed
-    error: transcriptionError,
-    isLoading: isTranscribing, // Renamed isLoading from hook
+    error: transcriptionError, // Keep top-level error for now
+    isLoading: isTranscribing, // Keep top-level loading for now
     startRecording,
     stopRecording,
-    setTranscription, // Get the setter for manual edits
+    // setTranscription, // Removed setter
     sendAudioToApi, // Get the function to send audio blobs
   } = useTranscription();
+
+  // Combine transcriptions from the array for display and generation
+  const combinedTranscription = transcriptions.map(t => t.text).join('\n\n---\n\n'); // Join with separator
 
   // Ref for the hidden file input
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -69,9 +72,10 @@ export default function Home() {
   };
 
 
-  // Function to call the generate API
+  // Function to call the generate API - Use combined text
   const handleGenerateContent = async (docType: string) => {
-    if (!transcription) {
+    // Check if the combined transcription is empty
+    if (!combinedTranscription) {
       setApiError("Please provide transcription text first.");
       return;
     }
@@ -87,7 +91,8 @@ export default function Home() {
           'Content-Type': 'application/json',
         },
         // Include outputLanguage in the request body
-        body: JSON.stringify({ transcription, docType, outputLanguage }),
+        // Use combinedTranscription in the request body
+        body: JSON.stringify({ transcription: combinedTranscription, docType, outputLanguage }),
       });
 
       if (!response.ok) {
@@ -250,22 +255,49 @@ export default function Home() {
               >
                 Upload Audio
               </Button>
+              {/* Add Audio Button */}
+              <Button
+                variant="outline"
+                size="icon" // Make it a square icon button
+                onClick={handleUploadClick} // Re-use upload handler for now
+                disabled={isRecording || isTranscribing}
+                className="transition-colors duration-200"
+                aria-label="Add another audio file" // Accessibility label
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
             </div>
 
-            {/* Transcription Area */}
-            <div className="grid w-full gap-1.5">
-              <Label htmlFor="transcription-area">Transcription (Editable)</Label>
-              {/* Display combined final and interim transcription */}
-              <Textarea
-                id="transcription-area"
-                rows={10}
-                value={transcription} // Show only final transcription
-                onChange={(e) => setTranscription(e.target.value)} // Allow manual edits
-                placeholder={isTranscribing ? "Transcribing audio..." : (isRecording ? "Recording..." : "Your transcription will appear here after recording stops...")}
-                className="bg-muted"
-                readOnly={isRecording || isTranscribing} // Make read-only while recording/transcribing
-              />
-              {/* Removed interim transcription indicator */}
+            {/* Transcription Area - Displaying Multiple Items */}
+            <div className="grid w-full gap-2"> {/* Changed gap */}
+              <Label>Transcriptions</Label>
+              {/* Map over the transcriptions array */}
+              {transcriptions.length === 0 && !isRecording && !isTranscribing && (
+                 <p className="text-sm text-muted-foreground">Your transcriptions will appear here...</p>
+              )}
+              {transcriptions.map((item) => (
+                <Card key={item.id} className="bg-muted p-3">
+                  {item.isLoading && (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>{item.text || 'Processing...'}</span> {/* Show 'Recording...' or 'Processing...' */}
+                    </div>
+                  )}
+                  {item.error && (
+                    <Alert variant="destructive" className="p-2 text-xs">
+                      <AlertTitle>Error</AlertTitle>
+                      <AlertDescription>{item.error}</AlertDescription>
+                    </Alert>
+                  )}
+                  {!item.isLoading && !item.error && (
+                    <p className="text-sm whitespace-pre-wrap">{item.text || '(Empty transcription)'}</p>
+                    // TODO: Add delete button here later
+                  )}
+                </Card>
+              ))}
+              {/* Display top-level recording/transcribing state if needed */}
+              {/* {isRecording && transcriptions.length === 0 && <p className="text-sm text-muted-foreground">Recording...</p>} */}
+              {/* {isTranscribing && transcriptions.length === 0 && <p className="text-sm text-muted-foreground">Transcribing audio...</p>} */}
             </div>
 
             {/* Display Transcription/Loading/Errors */}
@@ -304,7 +336,8 @@ export default function Home() {
                     key={type}
                     variant={selectedDocType === type ? "default" : "secondary"}
                     onClick={() => handleGenerateContent(type)}
-                    disabled={isLoading || !transcription}
+                    // Disable if loading OR if combined transcription is empty
+                    disabled={isLoading || !combinedTranscription}
                     className="transition-colors duration-200" // Add transition
                   >
                     {isLoading && selectedDocType === type ? (
