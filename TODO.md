@@ -23,10 +23,10 @@ Use Markdown checkboxes (`- [ ]` for incomplete, `- [x]` for complete) to track 
 
 - [ ] **Refine Existing Features:**
     - [ ] Enhance content generation quality/consistency.
-        - [ ] Refine prompts to request more comprehensive output based on transcription.
+        - [x] Refine prompts to request more comprehensive output based on transcription.
     - [ ] Refine UI/UX based on feedback.
         - [x] Center icons in collapsed sidebar.
-        - [ ] Ensure smooth text collapse in sidebar without pre-collapse visual changes.
+        - [x] Ensure smooth text collapse in sidebar without pre-collapse visual changes.
         - [ ] Add UI element (e.g., '+' icon) to allow adding multiple audio inputs before final generation.
     - [ ] Add more comprehensive error handling and reporting.
 - [ ] **Implement Sidebar Functionality:**
