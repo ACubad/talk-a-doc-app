@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
-import { Loader2, Plus } from "lucide-react"; // Import Loader2 and Plus
+import { Loader2, Plus, Paperclip } from "lucide-react"; // Import Loader2, Plus, and Paperclip
 import RichTextPreviewEditor from '@/components/RichTextPreviewEditor'; // Import the new editor
 
 export default function Home() {
@@ -25,6 +25,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false); // Loading state for generation
   const [isDownloading, setIsDownloading] = useState(false); // Loading state for download
   const [apiError, setApiError] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<File[]>([]); // State for attached files
 
   // Use the transcription hook
   const {
@@ -36,7 +37,7 @@ export default function Home() {
     isLoading: isTranscribing, // Keep top-level loading for now
     startRecording,
     stopRecording,
-    // setTranscription, // Removed setter
+    updateTranscriptionText, // Import the new setter
     sendAudioToApi, // Get the function to send audio blobs
   } = useTranscription();
 
@@ -51,21 +52,29 @@ export default function Home() {
     fileInputRef.current?.click();
   };
 
-  // Function to handle file selection
+  // Function to handle file selection - Updated for attachments
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
+    const files = event.target.files;
+    if (files && files.length > 0) {
+      // Currently only handling the first selected file due to input setup
+      // TODO: Allow multiple file selection and processing if input `multiple` is used effectively
+      const file = files[0];
       console.log(`File selected: ${file.name}, size: ${file.size}, type: ${file.type}`);
-      // Basic validation (optional: add more specific types)
-      if (!file.type.startsWith('audio/')) {
-        setApiError('Invalid file type. Please upload an audio file.');
-        // Reset file input value so the same file can be selected again if needed
-        if (event.target) event.target.value = '';
-        return;
-      }
       setApiError(null); // Clear previous errors
-      // Use the function from the hook to send the file
-      sendAudioToApi(file, selectedLanguage);
+
+      // Check file type
+      if (file.type.startsWith('audio/')) {
+        // Handle audio file: Send for transcription
+        sendAudioToApi(file, selectedLanguage);
+      } else if (file.type.startsWith('image/') || file.type === 'application/pdf' || file.type === 'application/msword' || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || file.type === 'text/plain') {
+        // Handle allowed attachment types
+        setAttachments(prev => [...prev, file]);
+        console.log('Attachment added:', file.name);
+      } else {
+        // Handle unsupported file type
+        setApiError(`Unsupported file type: ${file.type}. Please upload audio, image, PDF, DOC, or TXT files.`);
+      }
+
       // Reset file input value so the same file can be selected again if needed
       if (event.target) event.target.value = '';
     }
@@ -90,9 +99,14 @@ export default function Home() {
         headers: {
           'Content-Type': 'application/json',
         },
-        // Include outputLanguage in the request body
-        // Use combinedTranscription in the request body
-        body: JSON.stringify({ transcription: combinedTranscription, docType, outputLanguage }),
+        // Include outputLanguage and attachment info in the request body
+        body: JSON.stringify({
+          transcription: combinedTranscription,
+          docType,
+          outputLanguage,
+          // Map attachments state to only include name and type for the API
+          attachments: attachments.map(file => ({ name: file.name, type: file.type })),
+        }),
       });
 
       if (!response.ok) {
@@ -244,7 +258,8 @@ export default function Home() {
                 ref={fileInputRef}
                 onChange={handleFileChange}
                 style={{ display: 'none' }}
-                accept="audio/*" // Accept all audio types
+                accept="audio/*,image/*,.pdf,.doc,.docx,.txt" // Accept audio, images, pdf, doc, txt
+                multiple // Allow selecting multiple files (though handleFileChange currently only takes the first) - TODO: Update handleFileChange later
               />
               {/* Upload Audio Button */}
               <Button
@@ -262,9 +277,9 @@ export default function Home() {
                 onClick={handleUploadClick} // Re-use upload handler for now
                 disabled={isRecording || isTranscribing}
                 className="transition-colors duration-200"
-                aria-label="Add another audio file" // Accessibility label
+                aria-label="Attach file" // Updated accessibility label
               >
-                <Plus className="h-4 w-4" />
+                <Paperclip className="h-4 w-4" /> {/* Changed icon */}
               </Button>
             </div>
 
@@ -290,7 +305,14 @@ export default function Home() {
                     </Alert>
                   )}
                   {!item.isLoading && !item.error && (
-                    <p className="text-sm whitespace-pre-wrap">{item.text || '(Empty transcription)'}</p>
+                    // Replace <p> with Textarea for editing
+                    <Textarea
+                      value={item.text}
+                      onChange={(e) => updateTranscriptionText(item.id, e.target.value)}
+                      placeholder="(Empty transcription)"
+                      className="text-sm bg-background border-0 focus-visible:ring-1 focus-visible:ring-ring" // Adjust styling
+                      rows={Math.max(3, item.text.split('\n').length)} // Basic auto-row adjustment
+                    />
                     // TODO: Add delete button here later
                   )}
                 </Card>
@@ -298,6 +320,30 @@ export default function Home() {
               {/* Display top-level recording/transcribing state if needed */}
               {/* {isRecording && transcriptions.length === 0 && <p className="text-sm text-muted-foreground">Recording...</p>} */}
               {/* {isTranscribing && transcriptions.length === 0 && <p className="text-sm text-muted-foreground">Transcribing audio...</p>} */}
+            </div>
+
+            {/* Attachments Area */}
+            <div className="grid w-full gap-2 pt-4 border-t mt-4">
+              <Label>Attachments</Label>
+              {attachments.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No files attached yet.</p>
+              ) : (
+                <ul className="list-disc pl-5 space-y-1">
+                  {attachments.map((file, index) => (
+                    <li key={index} className="text-sm flex justify-between items-center">
+                      <span>{file.name}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-500 hover:text-red-700 h-auto p-1"
+                        onClick={() => setAttachments(prev => prev.filter((_, i) => i !== index))} // Remove attachment
+                      >
+                        Remove
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             {/* Display Transcription/Loading/Errors */}

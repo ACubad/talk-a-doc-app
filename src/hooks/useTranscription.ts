@@ -260,10 +260,10 @@ export function useTranscription() {
   }, []);
 
 
-  // TODO: Implement a function to update a specific transcription item's text
-  // const updateTranscriptionText = useCallback((id: string, newText: string) => {
-  //   setTranscriptions(prev => prev.map(item => item.id === id ? { ...item, text: newText } : item));
-  // }, [setTranscriptions]);
+  // Function to update a specific transcription item's text
+  const updateTranscriptionText = useCallback((id: string, newText: string) => {
+    setTranscriptions(prev => prev.map(item => item.id === id ? { ...item, text: newText } : item));
+  }, [setTranscriptions]);
 
   return {
     isRecording,
@@ -272,8 +272,7 @@ export function useTranscription() {
     isLoading, // Keep top-level loading for now
     startRecording,
     stopRecording,
-    // setTranscription, // Remove old setter for now
-    // updateTranscriptionText, // Expose new setter later
+    updateTranscriptionText, // Expose the new setter
     sendAudioToApi, // Expose the function to send audio blobs
   };
 }
