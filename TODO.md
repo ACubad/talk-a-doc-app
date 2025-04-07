@@ -28,6 +28,7 @@ Use Markdown checkboxes (`- [ ]` for incomplete, `- [x]` for complete) to track 
         - [x] Center icons in collapsed sidebar.
         - [x] Ensure smooth text collapse in sidebar without pre-collapse visual changes.
         - [x] Add UI element (e.g., '+' icon) to allow adding multiple audio inputs before final generation.
+        - [x] Make individual transcriptions editable in the UI.
     - [ ] Add more comprehensive error handling and reporting.
 - [ ] **Implement Sidebar Functionality:**
     - [ ] Define and implement actions for each sidebar item (currently placeholders).
@@ -42,6 +43,10 @@ Use Markdown checkboxes (`- [ ]` for incomplete, `- [x]` for complete) to track 
     - [ ] Implement more specific templates within types (e.g., Formal Email vs. Casual Email).
     - [ ] Allow users to provide custom prompts or instructions for generation.
     - [ ] Implement functionality to incorporate attached documents/images into the generation process (requires frontend and backend changes).
+        - [x] Add UI for attaching files (button, accept types, display list).
+        - [x] Implement frontend state management for attachments.
+        - [x] Update backend API to accept attachment info and include in prompt context.
+        - [ ] Implement backend logic to extract content from attachments for AI context.
     - [ ] Investigate generating more complex formats (e.g., specific Excel structures).
 - [ ] **Enhance the Editor:**
     - [ ] Add more rich text formatting options (e.g., fonts, colors, lists, tables).
