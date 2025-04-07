@@ -29,12 +29,22 @@ Use Markdown checkboxes (`- [ ]` for incomplete, `- [x]` for complete) to track 
         - [x] Ensure smooth text collapse in sidebar without pre-collapse visual changes.
         - [x] Add UI element (e.g., '+' icon) to allow adding multiple audio inputs before final generation.
         - [x] Make individual transcriptions editable in the UI.
+        - [x] Add UI element (e.g., 'X' icon) to allow removing individual transcription boxes.
     - [ ] Add more comprehensive error handling and reporting.
-- [ ] **Implement Sidebar Functionality:**
-    - [ ] Define and implement actions for each sidebar item (currently placeholders).
-- [ ] **Add User Accounts & History:**
+- [ ] **Implement Sidebar Functionality (Depends on User Accounts):**
+    - [ ] **New Document:**
+        - [ ] Save current document state to user's history (requires User Accounts & DB).
+        - [ ] Clear frontend state (audio, transcription, generation, selections).
+    - [ ] **History:**
+        - [ ] Fetch document list from backend (requires User Accounts & DB).
+        - [ ] Display document list in UI.
+        - [ ] Implement preview modal/popup for selected historical document.
+    - [ ] **Settings:**
+        - [ ] Implement Theme switching (Light/Dark).
+        - [ ] Implement Subscription management UI/logic (requires User Accounts & potentially payment provider integration).
+- [ ] **Add User Accounts & History (Prerequisite for Sidebar Save/History):**
     - [ ] Implement user authentication (e.g., using Supabase Auth).
-    - [ ] Create database schema for storing user data, transcriptions, and documents.
+    - [ ] Create database schema for storing user data, transcriptions, and documents (see details in Sidebar section).
     - [ ] Build UI for login/signup.
     - [ ] Implement functionality to save/load user work.
     - [ ] Create a dashboard/history view for users.

@@ -2,6 +2,8 @@
 
 "use client"; // Required for hooks like useState
 
+"use client"; // Required for hooks like useState
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranscription } from '@/hooks/useTranscription';
 
@@ -13,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
-import { Loader2, Plus, Paperclip } from "lucide-react"; // Import Loader2, Plus, and Paperclip
+import { Loader2, Plus, Paperclip, X } from "lucide-react"; // Import Loader2, Plus, Paperclip, and X
 import RichTextPreviewEditor from '@/components/RichTextPreviewEditor'; // Import the new editor
 
 export default function Home() {
@@ -38,6 +40,7 @@ export default function Home() {
     startRecording,
     stopRecording,
     updateTranscriptionText, // Import the new setter
+    removeTranscriptionItem, // Import the new remover
     sendAudioToApi, // Get the function to send audio blobs
   } = useTranscription();
 
@@ -305,15 +308,25 @@ export default function Home() {
                     </Alert>
                   )}
                   {!item.isLoading && !item.error && (
-                    // Replace <p> with Textarea for editing
-                    <Textarea
-                      value={item.text}
-                      onChange={(e) => updateTranscriptionText(item.id, e.target.value)}
-                      placeholder="(Empty transcription)"
-                      className="text-sm bg-background border-0 focus-visible:ring-1 focus-visible:ring-ring" // Adjust styling
-                      rows={Math.max(3, item.text.split('\n').length)} // Basic auto-row adjustment
-                    />
-                    // TODO: Add delete button here later
+                    <div className="relative group"> {/* Add relative positioning for the button */}
+                      <Textarea
+                        value={item.text}
+                        onChange={(e) => updateTranscriptionText(item.id, e.target.value)}
+                        placeholder="(Empty transcription)"
+                        className="text-sm bg-background border-0 focus-visible:ring-1 focus-visible:ring-ring pr-8" // Add padding-right for button
+                        rows={Math.max(3, item.text.split('\n').length)} // Basic auto-row adjustment
+                      />
+                      {/* Remove Button */}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute top-1 right-1 h-6 w-6 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity" // Position top-right, style, hide by default
+                        onClick={() => removeTranscriptionItem(item.id)}
+                        aria-label="Remove transcription"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
                   )}
                 </Card>
               ))}

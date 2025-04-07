@@ -265,6 +265,11 @@ export function useTranscription() {
     setTranscriptions(prev => prev.map(item => item.id === id ? { ...item, text: newText } : item));
   }, [setTranscriptions]);
 
+  // Function to remove a specific transcription item
+  const removeTranscriptionItem = useCallback((id: string) => {
+    setTranscriptions(prev => prev.filter(item => item.id !== id));
+  }, [setTranscriptions]);
+
   return {
     isRecording,
     transcriptions, // Return the array
@@ -273,6 +278,7 @@ export function useTranscription() {
     startRecording,
     stopRecording,
     updateTranscriptionText, // Expose the new setter
+    removeTranscriptionItem, // Expose the new remover function
     sendAudioToApi, // Expose the function to send audio blobs
   };
 }
