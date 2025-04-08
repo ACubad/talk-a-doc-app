@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react'; // Keep useState
 import { motion } from 'framer-motion';
-import { useExpandable } from '@/hooks/use-expandable';
+import { useExpandable } from '@/hooks/use-expandable'; // Keep useExpandable
 import { cn } from '@/lib/utils';
 import { Loader2, AlertCircle, ExternalLink, Download, Copy, Check } from 'lucide-react';
 import type { LoadedDocumentData } from './sidebar';
@@ -17,6 +17,7 @@ import {
   DialogTrigger,
   DialogOverlay,
 } from "@/components/ui/dialog";
+// Tooltip components are already imported, no change needed here.
 import {
   Tooltip,
   TooltipContent,
@@ -37,7 +38,7 @@ interface ExpandableDocumentCardProps {
 
 export function ExpandableDocumentCard({ document }: ExpandableDocumentCardProps) {
   const detailsContentRef = useRef<HTMLDivElement>(null);
-  const { isExpanded, toggleExpand, animatedHeight } = useExpandable(false);
+  const { isExpanded, toggleExpand } = useExpandable(false); // Remove animatedHeight from hook usage
   const [fullDocumentData, setFullDocumentData] = useState<LoadedDocumentData | null>(null);
   const [isContentLoading, setIsContentLoading] = useState(false);
   const [contentError, setContentError] = useState<string | null>(null);
@@ -72,17 +73,10 @@ export function ExpandableDocumentCard({ document }: ExpandableDocumentCardProps
     fetchFullDocument();
   }, [isExpanded, document.id, fullDocumentData, isContentLoading, contentError]);
 
-  // Adjust animated height for the details section
-  useEffect(() => {
-    if (detailsContentRef.current) {
-      animatedHeight.set(isExpanded ? detailsContentRef.current.offsetHeight : 0);
-    } else if (!isExpanded) {
-      animatedHeight.set(0);
-    }
-  }, [isExpanded, isContentLoading, contentError, fullDocumentData, animatedHeight]);
+  // REMOVE useEffect for animatedHeight calculation
 
   const handleToggleExpand = useCallback(() => {
-    toggleExpand();
+    toggleExpand(); // Use toggleExpand from the hook
   }, [toggleExpand]);
 
   // Handle Copy Action
@@ -159,26 +153,47 @@ export function ExpandableDocumentCard({ document }: ExpandableDocumentCardProps
   return (
     <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
       {/* Card Part */}
+      {/* Card Part */}
       <div
         className={cn(
           "relative bg-gradient-to-b dark:from-neutral-900 from-neutral-100 dark:to-neutral-950 to-white",
           "p-6 rounded-3xl overflow-hidden border dark:border-neutral-700 border-neutral-300",
           "transition-shadow duration-200",
-          isExpanded ? "shadow-lg" : "hover:shadow-md"
+          "flex flex-col", // Always flex-col
+          "h-[280px]", // Set fixed height (adjust value as needed) - Changed from min-h
+          isExpanded ? "justify-start shadow-lg" : "justify-center items-center hover:shadow-md" // Conditional centering/alignment
         )}
       >
         {/* Clickable Header */}
         <div
-          className="cursor-pointer flex justify-between items-start gap-4"
+          className={cn(
+            "cursor-pointer flex justify-between items-start gap-4 w-full" // Ensure header takes full width
+          )}
           onClick={handleToggleExpand}
           role="button"
           aria-expanded={isExpanded}
           aria-controls={`details-${document.id}`}
         >
-          <div>
-            <p className="text-base font-bold text-neutral-800 dark:text-white relative z-20 truncate">
-              {document.title || 'Untitled Document'}
-            </p>
+          {/* Wrap title in Tooltip */}
+          {/* Added conditional text-center for collapsed state */}
+          <div className={cn("flex-grow overflow-hidden mr-2", !isExpanded && "text-center")}>
+            <TooltipProvider delayDuration={100}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  {/* Conditionally apply truncate class */}
+                  <p className={cn(
+                    "text-base font-bold text-neutral-800 dark:text-white relative z-20",
+                    isExpanded && "truncate" // Apply truncate only when expanded
+                  )}>
+                    {document.title || 'Untitled Document'}
+                  </p>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {/* Show full title in tooltip */}
+                  <p>{document.title || 'Untitled Document'}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <p className="text-neutral-600 dark:text-neutral-400 mt-1 text-sm font-normal relative z-20">
               Updated: {new Date(document.updated_at).toLocaleDateString()}
             </p>
@@ -192,26 +207,34 @@ export function ExpandableDocumentCard({ document }: ExpandableDocumentCardProps
           </motion.div>
         </div>
 
-        {/* Expandable Details Area */}
-        <motion.div
-          id={`details-${document.id}`}
-          style={{ height: animatedHeight }}
-          className="overflow-hidden mt-4"
-          initial={false}
-        >
-          <div ref={detailsContentRef} className="pt-4 border-t dark:border-neutral-700 border-neutral-200">
+        {/* Apply margin conditionally outside the motion div */}
+        {isExpanded && <div className="mt-4 w-full"> 
+          {/* Expandable Details Area - Using Variants */}
+          <motion.div
+            id={`details-${document.id}`}
+            initial="hidden"
+            animate={isExpanded ? "visible" : "hidden"}
+            variants={{
+              // Removed marginTop from variants
+              hidden: { opacity: 0, height: 0, borderTopWidth: 0, paddingTop: 0, transition: { duration: 0.3 } },
+              visible: { opacity: 1, height: 'auto', borderTopWidth: 1, paddingTop: '1rem', transition: { duration: 0.3 } }
+            }}
+            className="overflow-hidden w-full dark:border-neutral-700 border-neutral-200 border-t" // Apply border styles directly
+          >
+          {/* Content inside the animated container */}
+          <div ref={detailsContentRef}>
             {isContentLoading && (
-              <div className="flex items-center justify-center p-4 text-sm text-neutral-500">
+              <div className="flex items-center justify-center pb-4 text-sm text-neutral-500"> {/* Adjusted padding */}
                 <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading details...
               </div>
             )}
             {contentError && (
-              <div className="flex items-center p-4 text-sm text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30 rounded-md">
+              <div className="flex items-center pb-4 text-sm text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30 rounded-md"> {/* Adjusted padding */}
                 <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0" /> Error: {contentError}
               </div>
             )}
             {fullDocumentData && !isContentLoading && !contentError && (
-              <div className="space-y-4">
+              <div className="space-y-4"> {/* Details content */}
                 <div className="text-sm">
                   <h4 className="font-semibold mb-2">Document Details</h4>
                   <p><strong>Type:</strong> {fullDocumentData.document_type}</p>
@@ -227,11 +250,10 @@ export function ExpandableDocumentCard({ document }: ExpandableDocumentCardProps
                 </DialogTrigger>
               </div>
             )}
-             {!isContentLoading && !contentError && !fullDocumentData && isExpanded && (
-               <div className="p-4 text-sm text-neutral-500">Expand to load details.</div>
-             )}
-          </div>
-        </motion.div>
+               {/* Removed the "Expand to load details" message as loading handles this */}
+            </div>
+          </motion.div>
+        </div>} 
       </div>
 
       {/* Modal Content */}
