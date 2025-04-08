@@ -258,17 +258,27 @@ export default function MainApp({}: MainAppProps) {
     setSelectedDocType(docType); // Set the selected type
 
     try {
+      // Create FormData object
+      const formData = new FormData();
+      formData.append('transcription', combinedTranscription);
+      formData.append('docType', docType);
+      formData.append('outputLanguage', outputLanguage);
+
+      // Append each attachment file
+      attachments.forEach((file) => {
+        formData.append('attachments', file); // Use 'attachments' as the key for all files
+      });
+
+      console.log('Sending FormData to /api/generate...');
+      // Log FormData entries (for debugging, might not show files in all browsers)
+      // for (let [key, value] of formData.entries()) {
+      //   console.log(`${key}:`, value);
+      // }
+
       const response = await fetch('/api/generate', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          transcription: combinedTranscription,
-          docType,
-          outputLanguage,
-          attachments: attachments.map(file => ({ name: file.name, type: file.type })),
-        }),
+        // No 'Content-Type' header needed; browser sets it for FormData
+        body: formData,
       });
 
       if (!response.ok) {
