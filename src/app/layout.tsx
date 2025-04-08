@@ -1,22 +1,21 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google"; // Corrected font import name if needed
 import "./globals.css";
+// Remove direct imports of SidebarBody, SidebarLink, etc. as they are handled internally now
+// import {
+//   Sidebar,
+//   SidebarBody,
+//   SidebarLink,
+// } from "../components/sidebar";
 import {
-  Sidebar,
-  SidebarBody,
-  SidebarLink,
-} from "../components/sidebar"; // Removed useSidebar import
-import {
-  // Home, // Home is unused now, can be removed later if desired
-  Settings,
-  FilePenLine,
-  Search,
-  FolderKanban,
-} from "lucide-react";
-import LogoutButton from "../components/LogoutButton"; // Import the new component
-// Removed ScrollArea import as it's likely handled within SidebarBody now
-// import { ScrollArea } from "../components/ui/scroll-area";
-import { createServerComponentClient } from '@/lib/supabaseClient'; // Import server client
+  Settings, // Keep icons if needed elsewhere, or remove if only used in sidebar
+  FilePenLine, // Keep icons if needed elsewhere
+  Search, // Keep icons if needed elsewhere
+  FolderKanban, // Keep icons if needed elsewhere
+} from "lucide-react"; // Removed duplicates
+// import LogoutButton from "../components/LogoutButton"; // LogoutButton is now internal to sidebar
+import { createServerComponentClient } from '@/lib/supabaseClient';
+import AppLayout from "@/components/AppLayout"; // Import the new AppLayout component
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -47,62 +46,11 @@ export default async function RootLayout({ // Make async
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        {/* Keep Sidebar provider wrapping, it might handle context */}
-        <Sidebar>
-          {/* Main layout container */}
-          <div className="flex flex-col md:flex-row h-screen">
-            {/* Conditionally render SidebarBody only if user is logged in */}
-            {user && (
-              <SidebarBody className="border-r border-neutral-200 dark:border-neutral-700 flex-shrink-0 md:h-full">
-                {/* Content previously here is likely handled within SidebarBody/Sidebar components now */}
-                {/* We might need to pass user info down if Sidebar needs it */}
-                 <div className="flex flex-col h-full p-4 overflow-hidden">
-                {/* Top Static Section */}
-                <div>
-                  <SidebarLink
-                    link={{
-                      label: "New Document",
-                      href: "/",
-                      icon: <FilePenLine className="w-4 h-4" />,
-                    }}
-                  />
-                  {/* Search Bar JSX moved to sidebar.tsx */}
-                  <SidebarLink
-                    link={{
-                      label: "Docs",
-                      href: "/docs",
-                      icon: <FolderKanban className="w-4 h-4" />,
-                    }}
-                  />
-                  </div>
-
-                  {/* Middle Scrollable History Section - Assuming handled within SidebarBody */}
-
-                  {/* Bottom Static Section */}
-                  <div className="mt-auto">
-                    {/* Profile Placeholder - TODO: Replace with actual user info/logout */}
-                    <div className="flex items-center gap-2 mb-2 p-2 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 cursor-pointer">
-                      <div className="w-6 h-6 bg-neutral-300 dark:bg-neutral-600 rounded-full flex-shrink-0"></div>
-                      {/* Display user email or name if available */}
-                      <span className="text-sm font-medium truncate">{user.email || 'User'}</span>
-                    </div>
-                    <SidebarLink
-                      link={{
-                        label: "Settings",
-                        href: "/settings",
-                        icon: <Settings className="w-4 h-4" />,
-                      }}
-                    />
-                    {/* Add Logout Button here */}
-                    <LogoutButton />
-                  </div>
-                </div>
-              </SidebarBody>
-            )}
-            {/* Main Content Area - flex-1 should make it fill space when sidebar is hidden */}
-            <main className="flex-1 overflow-y-auto">{children}</main>
-          </div>
-        </Sidebar>
+        {/* Use AppLayout to wrap the content */}
+        {/* Pass user object and children */}
+        <AppLayout user={user}>
+          {children}
+        </AppLayout>
       </body>
     </html>
   );

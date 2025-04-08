@@ -1,0 +1,126 @@
+"use client";
+
+import React, { useState, useCallback, createContext, useContext } from 'react'; // Added createContext, useContext
+import { SidebarBody, SidebarProvider } from "./sidebar"; // Import SidebarBody and SidebarProvider
+import type { LoadedDocumentData } from "./sidebar"; // Import the type definition
+import AuthForm from './AuthForm'; // Import the AuthForm component
+
+// Define the shape of the context data
+interface AppContextType {
+  loadedDocumentState: CurrentDocumentState | null;
+  handleLoadDocument: (data: LoadedDocumentData) => void;
+  handleNewDocument: () => void;
+}
+
+// Create the context with a default value (or null/undefined)
+const AppContext = createContext<AppContextType | undefined>(undefined);
+
+// Custom hook to use the AppContext
+export const useAppContext = () => {
+  const context = useContext(AppContext);
+  if (context === undefined) {
+    throw new Error('useAppContext must be used within an AppProvider');
+  }
+  return context;
+};
+
+
+interface AppLayoutProps {
+  children: React.ReactNode;
+  user: any; // Pass user object from layout
+}
+
+// Define state structure for the currently loaded document
+// This mirrors the state within MainApp that needs to be updated
+interface CurrentDocumentState {
+  documentId: string | null;
+  title: string;
+  inputLanguage: string;
+  outputLanguage: string;
+  docType: string;
+  generatedContent: string;
+  outputFormat: string;
+  transcriptions: Array<{ id: string; text: string; originalFilename?: string; isLoading?: boolean; error?: string | null }>;
+  // Add attachments if needed
+}
+
+export default function AppLayout({ children, user }: AppLayoutProps) {
+  // State to hold the data of the document loaded from history
+  const [loadedDocumentState, setLoadedDocumentState] = useState<CurrentDocumentState | null>(null);
+
+  // Callback function passed to the Sidebar
+  const handleLoadDocument = useCallback((data: LoadedDocumentData) => {
+    console.log("AppLayout: Loading document - ", data.title);
+
+    // Map the loaded data to the state structure expected by MainApp
+    const newState: CurrentDocumentState = {
+      documentId: data.id,
+      title: data.title,
+      inputLanguage: data.input_language, // Map DB field names
+      outputLanguage: data.output_language,
+      docType: data.document_type,
+      generatedContent: data.generated_content,
+      outputFormat: data.output_format,
+      // Map transcriptions from DB format to the format used in useTranscription hook/MainApp state
+      // Add explicit type for 't'
+      transcriptions: data.transcriptions.map((t: { id: string; transcribed_text: string; original_filename?: string }) => ({
+        id: t.id,
+        text: t.transcribed_text,
+        originalFilename: t.original_filename,
+        isLoading: false,
+        error: null,
+      // Add explicit types for 'a' and 'b' in sort
+      })).sort((a: { id: string }, b: { id: string }) => {
+          // Add explicit type for 't' in find
+          const orderA = data.transcriptions.find((t: { id: string; order: number }) => t.id === a.id)?.order ?? 0;
+          const orderB = data.transcriptions.find((t: { id: string; order: number }) => t.id === b.id)?.order ?? 0;
+          return orderA - orderB;
+      }),
+    };
+    setLoadedDocumentState(newState);
+  }, []);
+
+  // Function to clear the loaded state (e.g., when clicking "New Document")
+  const handleNewDocument = useCallback(() => {
+      console.log("AppLayout: Clearing loaded document state for New Document.");
+      setLoadedDocumentState(null);
+      // Potentially reset other relevant states if needed
+  }, []);
+
+
+  // If user is not logged in, show the AuthForm
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-neutral-100 dark:bg-neutral-900">
+        <AuthForm />
+      </div>
+    );
+  }
+
+  // If user is logged in, render the main application layout
+
+  // Create the context value
+  const contextValue: AppContextType = {
+    loadedDocumentState,
+    handleLoadDocument,
+    handleNewDocument,
+  };
+
+  return (
+    // Restore SidebarProvider
+    <SidebarProvider onLoadDocument={handleLoadDocument}>
+      <AppContext.Provider value={contextValue}>
+        {/* Main layout container */}
+        <div className="flex flex-col md:flex-row h-screen">
+          {/* Restore SidebarBody */}
+          <SidebarBody />
+          {/* Main content area */}
+          <main className="flex-1 overflow-y-auto bg-white dark:bg-neutral-900">
+            {/* Render page content */}
+            {children}
+          </main>
+        </div>
+      </AppContext.Provider>
+    </SidebarProvider> // Restored
+  );
+}

@@ -16,39 +16,19 @@ export async function middleware(request: NextRequest) {
         get(name: string) {
           return request.cookies.get(name)?.value
         },
+        // Corrected pattern: Modify the single 'response' object directly.
         set(name: string, value: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value,
-            ...options,
-          })
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          })
-          response.cookies.set({
-            name,
-            value,
-            ...options,
-          })
+          // Forward the request cookies modification (optional but good practice)
+          request.cookies.set({ name, value, ...options });
+          // Set the cookie on the response object initialized outside the handlers
+          response.cookies.set({ name, value, ...options });
         },
+        // Corrected pattern: Modify the single 'response' object directly.
         remove(name: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value: '',
-            ...options,
-          })
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          })
-          response.cookies.set({
-            name,
-            value: '',
-            ...options,
-          })
+          // Forward the request cookies modification (optional but good practice)
+          request.cookies.set({ name, value: '', ...options });
+          // Set the cookie removal on the response object initialized outside the handlers
+          response.cookies.set({ name, value: '', ...options });
         },
       },
     }

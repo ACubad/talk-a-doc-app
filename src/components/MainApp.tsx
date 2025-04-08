@@ -1,7 +1,20 @@
 "use client"; // This is now a Client Component
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useContext } from 'react'; // Added useContext
 import { useTranscription } from '@/hooks/useTranscription';
+import { useAppContext } from './AppLayout'; // Import the context hook
+// Simple debounce function using setTimeout
+const debounce = (func: (...args: any[]) => void, delay: number) => {
+  let timeoutId: NodeJS.Timeout | null = null;
+  return (...args: any[]) => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+    timeoutId = setTimeout(() => {
+      func(...args);
+    }, delay);
+  };
+};
 
 // Import Shadcn UI components
 import { Button } from "@/components/ui/button";
@@ -12,24 +25,48 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import { Loader2, Plus, Paperclip, X } from "lucide-react"; // Import Loader2, Plus, Paperclip, and X
-import RichTextPreviewEditor from '@/components/RichTextPreviewEditor'; // Import the new editor
+import RichTextPreviewEditor from '@/components/RichTextPreviewEditor';
 
-// Note: The component name is changed from Home to MainApp
-export default function MainApp() {
-  const [selectedLanguage, setSelectedLanguage] = useState('en-US'); // Input language
-  const [outputLanguage, setOutputLanguage] = useState('en'); // Output language, default English
+// Define the structure for the loaded document state prop
+interface CurrentDocumentState {
+  documentId: string | null;
+  title: string;
+  inputLanguage: string;
+  outputLanguage: string;
+  docType: string;
+  generatedContent: string;
+  outputFormat: string;
+  transcriptions: Array<{ id: string; text: string; originalFilename?: string; isLoading?: boolean; error?: string | null }>;
+}
+
+// Remove loadedDocumentState from props
+interface MainAppProps {
+  // No props needed for loaded state anymore
+}
+
+// Remove prop from function signature
+export default function MainApp({}: MainAppProps) {
+  // Consume the context
+  const { loadedDocumentState } = useAppContext();
+
+  const [selectedLanguage, setSelectedLanguage] = useState('en-US');
+  const [outputLanguage, setOutputLanguage] = useState('en');
   const [selectedDocType, setSelectedDocType] = useState('');
-  const [selectedFormat, setSelectedFormat] = useState('');
+  const [selectedFormat, setSelectedFormat] = useState('DOCX'); // Default to DOCX
   const [generatedContent, setGeneratedContent] = useState('');
-  const [isLoading, setIsLoading] = useState(false); // Loading state for generation
+  const [isLoading, setIsLoading] = useState(false); // Loading state for generation/saving
   const [isDownloading, setIsDownloading] = useState(false); // Loading state for download
   const [apiError, setApiError] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<File[]>([]); // State for attached files
+  const [currentDocumentId, setCurrentDocumentId] = useState<string | null>(null); // Track saved doc ID
+  const [currentDocumentTitle, setCurrentDocumentTitle] = useState<string>(''); // Track saved doc title
+  const [isSaving, setIsSaving] = useState(false); // Track saving state for UI feedback
 
   // Use the transcription hook
+  const transcriptionHook = useTranscription();
   const {
     isRecording,
-    transcriptions,
+    transcriptions, // Get state from hook
     error: transcriptionError,
     isLoading: isTranscribing,
     startRecording,
@@ -37,7 +74,8 @@ export default function MainApp() {
     updateTranscriptionText,
     removeTranscriptionItem,
     sendAudioToApi,
-  } = useTranscription();
+    setTranscriptions, // Add function to update transcriptions state from hook
+  } = transcriptionHook;
 
   // Combine transcriptions from the array for display and generation
   const combinedTranscription = transcriptions.map(t => t.text).join('\n\n---\n\n'); // Join with separator
@@ -72,7 +110,143 @@ export default function MainApp() {
   };
 
 
-  // Function to call the generate API - Use combined text
+  // --- Save Document Logic ---
+  const saveDocument = useCallback(async (docData: {
+    documentId?: string | null;
+    title: string;
+    inputLanguage: string;
+    outputLanguage: string;
+    documentType: string;
+    generatedContent: string;
+    outputFormat: string;
+    transcriptions: Array<{ text: string; id: string; originalFilename?: string }>; // Use hook's transcription type
+  }) => {
+    if (!docData.title || !docData.generatedContent) {
+      console.log("Save skipped: Missing title or content.");
+      return; // Don't save if essential parts are missing
+    }
+    setIsSaving(true);
+    setApiError(null);
+    console.log(`Attempting to save document ${docData.documentId ? `(ID: ${docData.documentId})` : '(New)'}...`);
+
+    try {
+      const payload = {
+        documentId: docData.documentId,
+        title: docData.title,
+        inputLanguage: docData.inputLanguage,
+        outputLanguage: docData.outputLanguage,
+        documentType: docData.documentType,
+        generatedContent: docData.generatedContent,
+        outputFormat: docData.outputFormat,
+        // Map transcriptions from hook state to the format expected by the API
+        transcriptions: docData.transcriptions.map((t, index) => ({
+          transcribed_text: t.text,
+          order: index, // Use array index for order
+          original_filename: t.originalFilename || undefined, // Pass if available
+        })),
+      };
+
+      const response = await fetch('/api/documents/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Save API request failed with status ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('Save successful:', result);
+      if (result.documentId && !currentDocumentId) {
+        setCurrentDocumentId(result.documentId); // Store the new ID if it was an insert
+      }
+      // Optionally show a success message briefly?
+    } catch (error) {
+      console.error("Save API error:", error);
+      setApiError(error instanceof Error ? error.message : "An unknown error occurred during save.");
+      // Keep isSaving true on error? Or set false? Let's set false.
+      setIsSaving(false);
+    } finally {
+      // Set saving false after a short delay to allow UI feedback
+      setTimeout(() => setIsSaving(false), 500);
+    }
+  }, [currentDocumentId]); // Dependency: currentDocumentId ensures the latest ID is used
+
+  // Debounced save function
+  const debouncedSave = useCallback(
+    debounce((data) => {
+        // Only save if we have a document ID (meaning initial save happened)
+        // and essential data exists
+        if (data.documentId && data.generatedContent && data.title) {
+            console.log("Debounced save triggered...");
+            saveDocument(data);
+        } else {
+            console.log("Debounced save skipped (no documentId or missing content/title).");
+        }
+    }, 2000), // 2-second debounce delay
+    [saveDocument] // Recreate debounce if saveDocument changes (it shouldn't often due to useCallback)
+  );
+
+  // Effect to trigger debounced save on changes AFTER initial generation/save
+  useEffect(() => {
+    // Only trigger if we have a document ID
+    if (currentDocumentId) {
+      const dataToSave = {
+        documentId: currentDocumentId,
+        title: currentDocumentTitle,
+        inputLanguage: selectedLanguage,
+        outputLanguage: outputLanguage,
+        documentType: selectedDocType,
+        generatedContent: generatedContent,
+        outputFormat: selectedFormat,
+        transcriptions: transcriptions, // Pass the current transcriptions state
+      };
+      debouncedSave(dataToSave);
+    }
+  }, [
+      transcriptions,
+      generatedContent,
+      currentDocumentTitle,
+      selectedLanguage,
+      outputLanguage,
+      selectedDocType,
+      selectedFormat,
+      currentDocumentId, // Include ID as dependency
+      debouncedSave
+  ]);
+
+  // Effect to update state when a document is loaded from history
+  useEffect(() => {
+    if (loadedDocumentState) {
+      console.log("MainApp: Applying loaded document state -", loadedDocumentState.title);
+      setCurrentDocumentId(loadedDocumentState.documentId);
+      setCurrentDocumentTitle(loadedDocumentState.title);
+      setSelectedLanguage(loadedDocumentState.inputLanguage);
+      setOutputLanguage(loadedDocumentState.outputLanguage);
+      setSelectedDocType(loadedDocumentState.docType);
+      setGeneratedContent(loadedDocumentState.generatedContent);
+      setSelectedFormat(loadedDocumentState.outputFormat);
+      // Update transcriptions using the hook's setter function
+      // Map the loaded transcriptions to the structure expected by the hook
+      const loadedTranscriptions = loadedDocumentState.transcriptions.map(t => ({
+          id: t.id, // Use the ID from the loaded data
+          text: t.text,
+          originalFilename: t.originalFilename,
+          isLoading: false, // Reset loading/error states
+          error: null,
+      }));
+      setTranscriptions(loadedTranscriptions); // Use the hook's setter
+      setAttachments([]); // Clear any local attachments when loading
+      setApiError(null); // Clear any previous errors
+    }
+    // We might want a way to reset the state if loadedDocumentState becomes null (e.g., user clicks "New")
+    // This could be handled here or in AppLayout's handleNewDocument
+  }, [loadedDocumentState, setTranscriptions]); // Add setTranscriptions dependency
+
+
+  // --- Generate Content Logic ---
   const handleGenerateContent = async (docType: string) => {
     if (!combinedTranscription) {
       setApiError("Please provide transcription text first.");
@@ -103,7 +277,23 @@ export default function MainApp() {
       }
 
       const data = await response.json();
+      // Assuming API now returns { generatedTitle, generatedContent }
       setGeneratedContent(data.generatedContent);
+      setCurrentDocumentTitle(data.generatedTitle || 'Untitled Document'); // Set the title from API
+
+      // --- Trigger initial save ---
+      await saveDocument({
+        // documentId is null here for insert
+        documentId: null, // Explicitly null for initial save
+        title: data.generatedTitle || 'Untitled Document',
+        inputLanguage: selectedLanguage, // Corrected: Use selectedLanguage
+        outputLanguage: outputLanguage,
+        documentType: docType,
+        generatedContent: data.generatedContent,
+        outputFormat: selectedFormat, // Need to ensure format is selected or handle default
+        transcriptions: transcriptions, // Pass current transcriptions
+      });
+      // Note: saveDocument will update currentDocumentId via its response
 
     } catch (error) {
       console.error("Generation API error:", error);
@@ -189,13 +379,16 @@ export default function MainApp() {
 
   // The entire JSX structure from the original Home component is moved here
   return (
-    <div className="container mx-auto p-4 md:p-8 min-h-screen flex flex-col gap-8">
-      <header className="text-center">
+    // Removed min-h-screen, flex, flex-col, gap-8 to let parent control layout
+    <div className="container mx-auto p-4 md:p-8">
+      {/* Removed test element */}
+      <header className="text-center mb-8"> {/* Added margin-bottom */}
         <h1 className="text-3xl font-bold">Talk A Doc</h1>
         <p className="text-muted-foreground">Generate documents from your voice.</p>
       </header>
 
-      <main className="grid grid-cols-1 md:grid-cols-2 gap-8 flex-grow">
+      {/* Removed flex-grow from main */}
+      <main className="grid grid-cols-1 md:grid-cols-2 gap-8">
         {/* Left Column: Input & Transcription */}
         <Card>
           <CardHeader>
@@ -391,9 +584,16 @@ export default function MainApp() {
            </CardHeader>
            <CardContent className="flex flex-col gap-4">
              <div className="grid w-full gap-1.5">
-               <Label htmlFor="preview-area">Preview (Editable) {isLoading ? '(Generating...)' : ''}</Label>
+               <Label htmlFor="preview-area">
+                 Preview (Editable)
+                 {isLoading ? ' (Generating...)' : ''}
+                 {isSaving ? ' (Saving...)' : ''}
+                 {currentDocumentId ? ` (Saved: ${currentDocumentTitle || 'Untitled'})` : ''}
+               </Label>
+               {/* TODO: Consider adding an input field for the title here eventually */}
+               {/* <Input value={currentDocumentTitle} onChange={(e) => setCurrentDocumentTitle(e.target.value)} placeholder="Document Title..." className="mb-2" /> */}
                <RichTextPreviewEditor
-                 id="preview-area" // Add the id prop here
+                 id="preview-area"
                  value={generatedContent}
                  onChange={setGeneratedContent}
                />
@@ -417,9 +617,10 @@ export default function MainApp() {
              </div>
 
              {/* Download Button */}
+             {/* Download Button */}
              <Button
                onClick={handleDownload}
-               disabled={!generatedContent || !selectedFormat || isDownloading || isLoading}
+               disabled={!generatedContent || !selectedFormat || isDownloading || isLoading || isSaving}
                className="transition-colors duration-200 w-full"
              >
                {isDownloading ? (
@@ -431,7 +632,8 @@ export default function MainApp() {
         </Card>
       </main>
 
-      <footer className="text-center text-sm text-muted-foreground mt-auto pt-4 border-t">
+      {/* Removed mt-auto as flex layout is removed from outer div */}
+      <footer className="text-center text-sm text-muted-foreground pt-8 border-t mt-8"> {/* Added top margin/padding */}
         Powered by Next.js, Supabase, Gemini, and Google Cloud Speech.
       </footer>
     </div>

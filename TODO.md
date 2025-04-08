@@ -44,10 +44,47 @@ Use Markdown checkboxes (`- [ ]` for incomplete, `- [x]` for complete) to track 
         - [ ] Implement Subscription management UI/logic (requires User Accounts & potentially payment provider integration).
 - [ ] **Add User Accounts & History (Prerequisite for Sidebar Save/History):**
     - [x] Implement user authentication (e.g., using Supabase Auth).
-    - [ ] Create database schema for storing user data, transcriptions, and documents (see details in Sidebar section).
+    - [x] Create database schema for storing user data, transcriptions, and documents.
+        - Proposed Schema (Supabase Tables):
+            - `documents` table:
+                - `id` (uuid, primary key, default gen_random_uuid())
+                - `user_id` (uuid, foreign key to `auth.users`)
+                - `created_at` (timestamp with time zone, default now())
+                - `updated_at` (timestamp with time zone, default now())
+                - `title` (text, nullable - maybe auto-generated initially?)
+                - `input_language` (text)
+                - `output_language` (text)
+                - `document_type` (text) // e.g., 'Report', 'Email'
+                - `generated_content` (text) // The final rich text/markdown
+                - `output_format` (text) // e.g., 'DOCX', 'PDF'
+            - `transcriptions` table:
+                - `id` (uuid, primary key, default gen_random_uuid())
+                - `document_id` (uuid, foreign key to `documents`, cascade delete)
+                - `user_id` (uuid, foreign key to `auth.users`) // For easier RLS/querying
+                - `created_at` (timestamp with time zone, default now())
+                - `original_filename` (text, nullable)
+                - `transcribed_text` (text)
+                - `order` (integer) // To maintain order if multiple transcriptions per document
+            - `attachments` table: (If implementing attachment saving)
+                - `id` (uuid, primary key, default gen_random_uuid())
+                - `document_id` (uuid, foreign key to `documents`, cascade delete)
+                - `user_id` (uuid, foreign key to `auth.users`)
+                - `created_at` (timestamp with time zone, default now())
+                - `filename` (text)
+                - `storage_path` (text) // Path in Supabase Storage
+                - `mime_type` (text)
     - [x] Build UI for login/signup.
-    - [ ] Implement functionality to save/load user work.
-    - [ ] Create a dashboard/history view for users.
+    - [x] Implement functionality to save/load user work (auto-save after generation, debounced saves on edit, load from history).
+        - [x] Backend API: `/api/generate` updated to return title.
+        - [x] Backend API: `/api/documents/save` created (handles insert/update).
+        - [x] Backend API: `/api/documents/list` created.
+        - [x] Backend API: `/api/documents/load/[documentId]` created.
+        - [x] Frontend: `MainApp.tsx` updated to call save API and handle loaded state.
+        - [x] Frontend: `sidebar.tsx` updated to list history and call load API via context.
+        - [x] Frontend: `AppLayout.tsx` created to manage state and callback.
+        - [x] Frontend: `layout.tsx` updated to use `AppLayout`.
+        - [x] Hook: `useTranscription.ts` updated to expose setter.
+    - [ ] Create a dashboard/history view for users (UI refinement: display list, handle selection, potentially add edit/delete).
 - [ ] **Expand Document Types/Templates:**
     - [ ] Add more predefined document types (e.g., Meeting Minutes, Blog Post).
     - [ ] Implement more specific templates within types (e.g., Formal Email vs. Casual Email).

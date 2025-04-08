@@ -277,8 +277,9 @@ export function useTranscription() {
     isLoading, // Keep top-level loading for now
     startRecording,
     stopRecording,
-    updateTranscriptionText, // Expose the new setter
-    removeTranscriptionItem, // Expose the new remover function
-    sendAudioToApi, // Expose the function to send audio blobs
+    updateTranscriptionText,
+    removeTranscriptionItem,
+    sendAudioToApi,
+    setTranscriptions, // Expose the state setter function
   };
 }
