@@ -13,7 +13,9 @@ import {
   Search,
   FolderKanban,
 } from "lucide-react";
-import { ScrollArea } from "../components/ui/scroll-area"; // Import ScrollArea
+// Removed ScrollArea import as it's likely handled within SidebarBody now
+// import { ScrollArea } from "../components/ui/scroll-area";
+import { createServerComponentClient } from '@/lib/supabaseClient'; // Import server client
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,22 +34,28 @@ export const metadata: Metadata = {
 
 // Removed OpenOnly helper component
 
-export default function RootLayout({
+export default async function RootLayout({ // Make async
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Fetch user session on the server
+  const supabase = await createServerComponentClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <Sidebar> {/* SidebarProvider is inside Sidebar */}
-          {/* Changed flex direction for responsiveness */}
+        {/* Keep Sidebar provider wrapping, it might handle context */}
+        <Sidebar>
+          {/* Main layout container */}
           <div className="flex flex-col md:flex-row h-screen">
-            {/* SidebarBody renders DesktopSidebar (md+) and MobileSidebar (<md) */}
-            <SidebarBody className="border-r border-neutral-200 dark:border-neutral-700 flex-shrink-0 md:h-full"> {/* Ensure full height on md+ */}
-              {/* This content will be rendered inside DesktopSidebar and MobileSidebar */}
-              {/* Content structure remains, but conditional rendering is moved to sidebar.tsx */}
-              <div className="flex flex-col h-full p-4 overflow-hidden">
+            {/* Conditionally render SidebarBody only if user is logged in */}
+            {user && (
+              <SidebarBody className="border-r border-neutral-200 dark:border-neutral-700 flex-shrink-0 md:h-full">
+                {/* Content previously here is likely handled within SidebarBody/Sidebar components now */}
+                {/* We might need to pass user info down if Sidebar needs it */}
+                 <div className="flex flex-col h-full p-4 overflow-hidden">
                 {/* Top Static Section */}
                 <div>
                   <SidebarLink
@@ -65,27 +73,31 @@ export default function RootLayout({
                       icon: <FolderKanban className="w-4 h-4" />,
                     }}
                   />
-                </div>
-
-                {/* Middle Scrollable History Section JSX moved to sidebar.tsx */}
-
-                {/* Bottom Static Section */}
-                <div className="mt-auto">
-                  <div className="flex items-center gap-2 mb-2 p-2 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 cursor-pointer">
-                    <div className="w-6 h-6 bg-neutral-300 dark:bg-neutral-600 rounded-full flex-shrink-0"></div> {/* Profile Placeholder */}
-                    {/* User Name Span moved to sidebar.tsx */}
                   </div>
-                  <SidebarLink
-                    link={{
-                      label: "Settings",
-                      href: "/settings",
-                      icon: <Settings className="w-4 h-4" />,
-                    }}
-                  />
+
+                  {/* Middle Scrollable History Section - Assuming handled within SidebarBody */}
+
+                  {/* Bottom Static Section */}
+                  <div className="mt-auto">
+                    {/* Profile Placeholder - TODO: Replace with actual user info/logout */}
+                    <div className="flex items-center gap-2 mb-2 p-2 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 cursor-pointer">
+                      <div className="w-6 h-6 bg-neutral-300 dark:bg-neutral-600 rounded-full flex-shrink-0"></div>
+                      {/* Display user email or name if available */}
+                      <span className="text-sm font-medium truncate">{user.email || 'User'}</span>
+                    </div>
+                    <SidebarLink
+                      link={{
+                        label: "Settings",
+                        href: "/settings",
+                        icon: <Settings className="w-4 h-4" />,
+                      }}
+                    />
+                    {/* TODO: Add Logout Button here */}
+                  </div>
                 </div>
-              </div>
-            </SidebarBody>
-            {/* Main Content Area */}
+              </SidebarBody>
+            )}
+            {/* Main Content Area - flex-1 should make it fill space when sidebar is hidden */}
             <main className="flex-1 overflow-y-auto">{children}</main>
           </div>
         </Sidebar>
