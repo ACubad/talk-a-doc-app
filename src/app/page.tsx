@@ -10,7 +10,7 @@ export default async function Home() {
   const supabase = await createServerComponentClient(); // Await if it's async
 
   // Get the current user session
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser(); // Revert getUser call
 
   // Conditionally render AuthForm or MainApp based on user session
   return (

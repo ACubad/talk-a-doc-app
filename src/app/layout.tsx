@@ -13,6 +13,7 @@ import {
   Search,
   FolderKanban,
 } from "lucide-react";
+import LogoutButton from "../components/LogoutButton"; // Import the new component
 // Removed ScrollArea import as it's likely handled within SidebarBody now
 // import { ScrollArea } from "../components/ui/scroll-area";
 import { createServerComponentClient } from '@/lib/supabaseClient'; // Import server client
@@ -41,7 +42,7 @@ export default async function RootLayout({ // Make async
 }>) {
   // Fetch user session on the server
   const supabase = await createServerComponentClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser(); // Revert getUser call
 
   return (
     <html lang="en">
@@ -92,7 +93,8 @@ export default async function RootLayout({ // Make async
                         icon: <Settings className="w-4 h-4" />,
                       }}
                     />
-                    {/* TODO: Add Logout Button here */}
+                    {/* Add Logout Button here */}
+                    <LogoutButton />
                   </div>
                 </div>
               </SidebarBody>

@@ -11,8 +11,10 @@ import {
   Search,
   FolderKanban,
   Settings,
+  LogOut, // Import LogOut icon if needed, or use text
 } from "lucide-react"; // Added icons
 import { ScrollArea } from "../components/ui/scroll-area"; // Added ScrollArea
+import LogoutButton from "./LogoutButton"; // Import LogoutButton
 
 interface Links {
   label: string;
@@ -179,6 +181,8 @@ export const DesktopSidebar = ({
               icon: <Settings className="w-4 h-4" />,
             }}
           />
+          {/* Add LogoutButton here */}
+          <LogoutButton />
         </div>
       </div>
     </motion.div>
@@ -282,6 +286,8 @@ export const MobileSidebar = ({
                       icon: <Settings className="w-4 h-4" />,
                     }}
                   />
+                  {/* Add LogoutButton here */}
+                  <LogoutButton />
                 </div>
               </div>
             </motion.div>

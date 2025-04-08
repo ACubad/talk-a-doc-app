@@ -393,6 +393,7 @@ export default function MainApp() {
              <div className="grid w-full gap-1.5">
                <Label htmlFor="preview-area">Preview (Editable) {isLoading ? '(Generating...)' : ''}</Label>
                <RichTextPreviewEditor
+                 id="preview-area" // Add the id prop here
                  value={generatedContent}
                  onChange={setGeneratedContent}
                />

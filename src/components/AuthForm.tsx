@@ -130,6 +130,7 @@ export default function AuthForm() {
               <Label htmlFor="email">Email</Label>
                <Input
                 id="email"
+                name="email" // Add name attribute
                 type="email"
                 autoComplete="email" // Add autocomplete hint
                  placeholder="you@example.com"
@@ -145,6 +146,7 @@ export default function AuthForm() {
               <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
+                name="password" // Add name attribute
                 type="password"
                 autoComplete={isLoginMode ? "current-password" : "new-password"} // Add autocomplete hint
                 required
@@ -160,6 +162,7 @@ export default function AuthForm() {
                 <Label htmlFor="confirmPassword">Confirm Password</Label>
                 <Input
                   id="confirmPassword"
+                  name="confirmPassword" // Add name attribute
                   type="password"
                   autoComplete="new-password" // Add autocomplete hint
                   required
