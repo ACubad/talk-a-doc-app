@@ -240,9 +240,24 @@ export default function MainApp({}: MainAppProps) {
       setTranscriptions(loadedTranscriptions); // Use the hook's setter
       setAttachments([]); // Clear any local attachments when loading
       setApiError(null); // Clear any previous errors
+    } else {
+      // Handle the case where loadedDocumentState is null (e.g., "New Document" clicked)
+      console.log("MainApp: Resetting state for New Document.");
+      setCurrentDocumentId(null);
+      setCurrentDocumentTitle('');
+      // Reset selections to defaults if desired, or keep them
+      // setSelectedLanguage('en-US');
+      // setOutputLanguage('en');
+      setSelectedDocType('');
+      setGeneratedContent('');
+      // setSelectedFormat('DOCX');
+      setTranscriptions([]); // Clear transcriptions using the hook's setter
+      setAttachments([]); // Clear attachments
+      setApiError(null); // Clear errors
+      setIsLoading(false); // Reset loading states
+      setIsDownloading(false);
+      setIsSaving(false);
     }
-    // We might want a way to reset the state if loadedDocumentState becomes null (e.g., user clicks "New")
-    // This could be handled here or in AppLayout's handleNewDocument
   }, [loadedDocumentState, setTranscriptions]); // Add setTranscriptions dependency
 
 

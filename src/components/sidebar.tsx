@@ -17,6 +17,7 @@ import {
 import { ScrollArea } from "../components/ui/scroll-area";
 import LogoutButton from "./LogoutButton";
 import { Button } from "./ui/button"; // Import Button for history items
+import { useAppContext } from "./AppLayout"; // Import App context hook
 
 // Define types for history items and loaded documents
 interface HistoryItem {
@@ -161,6 +162,7 @@ export const DesktopSidebar: FC<DesktopSidebarProps> = ({
 }) => {
   // Get onLoadDocument from context
   const { open, setOpen, animate, onLoadDocument } = useSidebar();
+  const { handleNewDocument } = useAppContext(); // Get handleNewDocument from AppContext
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -237,12 +239,14 @@ export const DesktopSidebar: FC<DesktopSidebarProps> = ({
       <div className={cn("flex flex-col h-full", !open ? "p-3" : "p-4")}>
         {/* Top Static Section */}
         <div>
+          {/* Add onClick handler specifically for New Document */}
           <SidebarLink
             link={{
               label: "New Document",
               href: "/",
               icon: <FilePenLine className="w-4 h-4" />,
             }}
+            onClick={handleNewDocument} // Call the context function on click
           />
           {/* Restore conditional rendering */}
           {open && (
@@ -333,6 +337,7 @@ export const MobileSidebar: FC<MobileSidebarProps> = ({
 }) => {
   // Get onLoadDocument from context
   const { open, setOpen, onLoadDocument } = useSidebar();
+  const { handleNewDocument } = useAppContext(); // Get handleNewDocument from AppContext
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -423,11 +428,16 @@ export const MobileSidebar: FC<MobileSidebarProps> = ({
               <div className="flex flex-col h-full pt-10">
                 {/* Top Static Section */}
                 <div>
+                  {/* Add onClick handler specifically for New Document */}
                   <SidebarLink
                     link={{
                       label: "New Document",
                       href: "/",
                       icon: <FilePenLine className="w-4 h-4" />,
+                    }}
+                    onClick={() => {
+                      handleNewDocument(); // Call context function
+                      setOpen(false); // Close mobile sidebar
                     }}
                   />
                   <div className="relative my-4">
@@ -501,14 +511,16 @@ export const MobileSidebar: FC<MobileSidebarProps> = ({
   );
 };
 
-// SidebarLink component (remains the same)
+// SidebarLink component
 export const SidebarLink = ({
   link,
   className,
+  onClick, // Add optional onClick prop
   ...props
 }: {
   link: Links;
   className?: string;
+  onClick?: () => void; // Define the prop type
   props?: LinkProps;
 }) => {
   // Restore original logic using context 'open' state
@@ -522,6 +534,7 @@ export const SidebarLink = ({
         open ? "justify-start" : "justify-center", // Restore conditional justify
         className
       )}
+      onClick={onClick} // Add onClick handler to the Link
       {...props}
     >
       {link.icon}
