@@ -43,9 +43,9 @@ Use Markdown checkboxes (`- [ ]` for incomplete, `- [x]` for complete) to track 
         - [ ] Implement Theme switching (Light/Dark).
         - [ ] Implement Subscription management UI/logic (requires User Accounts & potentially payment provider integration).
 - [ ] **Add User Accounts & History (Prerequisite for Sidebar Save/History):**
-    - [ ] Implement user authentication (e.g., using Supabase Auth).
+    - [x] Implement user authentication (e.g., using Supabase Auth).
     - [ ] Create database schema for storing user data, transcriptions, and documents (see details in Sidebar section).
-    - [ ] Build UI for login/signup.
+    - [x] Build UI for login/signup.
     - [ ] Implement functionality to save/load user work.
     - [ ] Create a dashboard/history view for users.
 - [ ] **Expand Document Types/Templates:**
