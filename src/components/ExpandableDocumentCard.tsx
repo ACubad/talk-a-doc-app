@@ -10,12 +10,12 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogDescription, // Keep this import even if not used directly in this structure
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogOverlay, // Keep overlay import for potential future use at correct level if needed
+  DialogOverlay,
 } from "@/components/ui/dialog";
 import {
   Tooltip,
@@ -23,7 +23,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-// Removed ScrollArea import as we'll use a standard div for scrolling
 
 // Corrected interface to match API data
 interface DocumentSummary {
@@ -44,11 +43,11 @@ export function ExpandableDocumentCard({ document }: ExpandableDocumentCardProps
   const [contentError, setContentError] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   // Fetch full document content when expanded
   useEffect(() => {
     async function fetchFullDocument() {
-      // Fetch only if expanded AND data isn't already loaded/loading/errored
       if (isExpanded && !fullDocumentData && !isContentLoading && !contentError) {
         setIsContentLoading(true);
         setContentError(null);
@@ -86,11 +85,10 @@ export function ExpandableDocumentCard({ document }: ExpandableDocumentCardProps
     toggleExpand();
   }, [toggleExpand]);
 
-  // Handle Copy Action - Copying plain text now
+  // Handle Copy Action
   const handleCopy = useCallback(async () => {
     if (!fullDocumentData?.generated_content) return;
     try {
-      // Basic text extraction from HTML for clipboard (still useful if content has tags)
       const tempDiv = window.document.createElement('div');
       tempDiv.innerHTML = fullDocumentData.generated_content;
       const textToCopy = tempDiv.textContent || tempDiv.innerText || "";
@@ -103,11 +101,59 @@ export function ExpandableDocumentCard({ document }: ExpandableDocumentCardProps
   }, [fullDocumentData]);
 
   // Handle Download Action
-  const handleDownload = useCallback(() => {
+  const handleDownload = useCallback(async () => {
     if (!fullDocumentData) return;
-    const downloadUrl = `/api/download?id=${document.id}&format=${fullDocumentData.output_format}`;
-    window.open(downloadUrl, '_blank');
-  }, [document.id, fullDocumentData]);
+    setIsDownloading(true);
+    try {
+      const response = await fetch('/api/download', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          content: fullDocumentData.generated_content,
+          format: 'DOCX',
+          docType: fullDocumentData.document_type,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Download failed: Could not parse error response' }));
+        throw new Error(errorData.error || `Download failed: ${response.status}`);
+      }
+
+      const disposition = response.headers.get('content-disposition');
+      let filename = 'download.docx';
+      if (disposition && disposition.indexOf('attachment') !== -1) {
+        const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+        const matches = filenameRegex.exec(disposition);
+        if (matches != null && matches[1]) {
+          filename = matches[1].replace(/['"]/g, '');
+        }
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = window.document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      window.document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error('Download error:', error);
+      alert(`Download failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsDownloading(false);
+    }
+  }, [fullDocumentData]);
+
+  // Prevent default focus behavior when modal opens
+  const handleOpenAutoFocus = (event: Event) => {
+    event.preventDefault();
+  };
 
 
   return (
@@ -166,7 +212,7 @@ export function ExpandableDocumentCard({ document }: ExpandableDocumentCardProps
             )}
             {fullDocumentData && !isContentLoading && !contentError && (
               <div className="space-y-4">
-                <div className="text-sm"> {/* Removed prose classes */}
+                <div className="text-sm">
                   <h4 className="font-semibold mb-2">Document Details</h4>
                   <p><strong>Type:</strong> {fullDocumentData.document_type}</p>
                   <p><strong>Input Language:</strong> {fullDocumentData.input_language}</p>
@@ -181,43 +227,44 @@ export function ExpandableDocumentCard({ document }: ExpandableDocumentCardProps
                 </DialogTrigger>
               </div>
             )}
-             {!isContentLoading && !contentError && !fullDocumentData && isExpanded && ( // Show placeholder only when expanded and no data/error/loading
+             {!isContentLoading && !contentError && !fullDocumentData && isExpanded && (
                <div className="p-4 text-sm text-neutral-500">Expand to load details.</div>
              )}
           </div>
         </motion.div>
       </div>
 
-      {/* Modal Content - Restructured to match example */}
-      <DialogContent className="sm:max-w-[80vw] md:max-w-[70vw] lg:max-w-[60vw] h-[80vh] flex flex-col p-0 gap-0"> {/* No padding/gap on content */}
-         {/* <DialogOverlay className="backdrop-blur-sm" />  <- REMOVED INCORRECTLY NESTED OVERLAY */}
+      {/* Modal Content */}
+      <DialogContent
+        className="sm:max-w-[80vw] md:max-w-[70vw] lg:max-w-[60vw] h-[80vh] flex flex-col p-0 gap-0"
+        onOpenAutoFocus={handleOpenAutoFocus} // Prevent auto-focus
+      >
          {/* Header */}
-         <DialogHeader className="px-6 py-4 border-b flex-shrink-0"> {/* Padding + Border + Prevent shrinking */}
+         <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
            <DialogTitle>{fullDocumentData?.title || 'Document Content'}</DialogTitle>
          </DialogHeader>
          {/* Scrollable Content Area */}
-         <div className="flex-grow overflow-y-auto"> {/* This div handles scrolling */}
+         <div className="flex-grow overflow-y-auto">
            <div
-             className="max-w-none whitespace-pre-wrap text-sm text-foreground px-6 py-4" // Padding inside scrollable area
-             // Restore HTML rendering
+             className="max-w-none whitespace-pre-wrap text-sm text-foreground px-6 py-4"
              dangerouslySetInnerHTML={{ __html: fullDocumentData?.generated_content || 'No content available.' }}
            />
          </div>
-         {/* Footer */}
-         <DialogFooter className="px-6 py-4 border-t bg-background sm:justify-end flex-shrink-0"> {/* Padding + Border + Prevent shrinking */}
+         {/* Footer - Standard tooltip implementation */}
+         <DialogFooter className="px-6 py-4 border-t bg-background sm:justify-end flex-shrink-0 sm:rounded-b-lg space-x-2">
            <TooltipProvider delayDuration={100}>
+             {/* Download Button Tooltip */}
              <Tooltip>
                <TooltipTrigger asChild>
-                 <Button variant="outline" size="icon" onClick={handleDownload} disabled={!fullDocumentData}>
-                   <Download className="h-4 w-4" />
+                 <Button variant="outline" size="icon" onClick={handleDownload} disabled={!fullDocumentData || isDownloading}>
+                   {isDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                  </Button>
                </TooltipTrigger>
                <TooltipContent>
                  <p>Download</p>
                </TooltipContent>
              </Tooltip>
-           </TooltipProvider>
-           <TooltipProvider delayDuration={100}>
+             {/* Copy Button Tooltip */}
              <Tooltip>
                <TooltipTrigger asChild>
                  <Button variant="outline" size="icon" onClick={handleCopy} disabled={!fullDocumentData?.generated_content}>
