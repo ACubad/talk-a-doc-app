@@ -44,11 +44,15 @@ interface MainAppProps {
   // No props needed for loaded state anymore
 }
 
+const LOCAL_STORAGE_KEY = 'talkADocAppState';
+
 // Remove prop from function signature
 export default function MainApp({}: MainAppProps) {
   // Consume the context
   const { loadedDocumentState } = useAppContext();
 
+  // --- State Initialization ---
+  // Initialize state with defaults, potentially overridden by localStorage later
   const [selectedLanguage, setSelectedLanguage] = useState('en-US');
   const [outputLanguage, setOutputLanguage] = useState('en');
   const [selectedDocType, setSelectedDocType] = useState('');
@@ -61,6 +65,7 @@ export default function MainApp({}: MainAppProps) {
   const [currentDocumentId, setCurrentDocumentId] = useState<string | null>(null); // Track saved doc ID
   const [currentDocumentTitle, setCurrentDocumentTitle] = useState<string>(''); // Track saved doc title
   const [isSaving, setIsSaving] = useState(false); // Track saving state for UI feedback
+  const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false); // Flag to prevent saving during initial load
 
   // Use the transcription hook
   const transcriptionHook = useTranscription();
@@ -217,9 +222,94 @@ export default function MainApp({}: MainAppProps) {
       debouncedSave
   ]);
 
-  // Effect to update state when a document is loaded from history
+  // --- localStorage Persistence ---
+
+  // Effect to LOAD state from localStorage on initial mount
   useEffect(() => {
+    console.log("MainApp: Attempting to load state from localStorage...");
+    const savedStateString = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (savedStateString) {
+      try {
+        const savedState = JSON.parse(savedStateString);
+        console.log("MainApp: Found saved state:", savedState);
+        // Restore state carefully, checking if properties exist
+        if (savedState.selectedLanguage) setSelectedLanguage(savedState.selectedLanguage);
+        if (savedState.outputLanguage) setOutputLanguage(savedState.outputLanguage);
+        if (savedState.selectedDocType) setSelectedDocType(savedState.selectedDocType);
+        if (savedState.selectedFormat) setSelectedFormat(savedState.selectedFormat);
+        if (savedState.generatedContent) setGeneratedContent(savedState.generatedContent);
+        if (savedState.transcriptions) setTranscriptions(savedState.transcriptions); // Assuming hook handles validation
+        if (savedState.currentDocumentId) setCurrentDocumentId(savedState.currentDocumentId);
+        if (savedState.currentDocumentTitle) setCurrentDocumentTitle(savedState.currentDocumentTitle);
+        // Don't restore attachments, isLoading, isDownloading, isSaving, apiError
+      } catch (error) {
+        console.error("Failed to parse saved state from localStorage:", error);
+        localStorage.removeItem(LOCAL_STORAGE_KEY); // Clear corrupted state
+      }
+    } else {
+      console.log("MainApp: No saved state found in localStorage.");
+    }
+    setIsInitialLoadComplete(true); // Mark initial load as complete
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty dependency array ensures this runs only once on mount
+
+
+  // Debounced function to SAVE state to localStorage
+  const debouncedSaveToLocalStorage = useCallback(
+    debounce(() => {
+      // Only save if initial load is complete and not currently loading from history
+      if (isInitialLoadComplete && !loadedDocumentState) {
+        console.log("MainApp: Saving state to localStorage...");
+        const stateToSave = {
+          selectedLanguage,
+          outputLanguage,
+          selectedDocType,
+          selectedFormat,
+          generatedContent,
+          transcriptions, // Save transcriptions from the hook
+          currentDocumentId,
+          currentDocumentTitle,
+          // Do not save attachments, loading/saving states, or errors
+        };
+        try {
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(stateToSave));
+        } catch (error) {
+          console.error("Failed to save state to localStorage:", error);
+        }
+      } else {
+         console.log("MainApp: Skipping save to localStorage (initial load not complete or history item loaded).");
+      }
+    }, 1000), // 1-second debounce
+    [
+      isInitialLoadComplete,
+      loadedDocumentState,
+      selectedLanguage,
+      outputLanguage,
+      selectedDocType,
+      selectedFormat,
+      generatedContent,
+      transcriptions,
+      currentDocumentId,
+      currentDocumentTitle,
+    ]
+  );
+
+  // Effect to trigger SAVE state to localStorage when relevant state changes
+  useEffect(() => {
+    debouncedSaveToLocalStorage();
+  }, [debouncedSaveToLocalStorage]);
+
+
+  // Effect to update state when a document is loaded from history OR "New Document" is clicked
+  useEffect(() => {
+    // Prevent this effect from running until initial localStorage load is done
+    if (!isInitialLoadComplete) {
+        console.log("MainApp: Skipping history/new effect until initial load complete.");
+        return;
+    }
+
     if (loadedDocumentState) {
+      // --- Load from History ---
       console.log("MainApp: Applying loaded document state -", loadedDocumentState.title);
       setCurrentDocumentId(loadedDocumentState.documentId);
       setCurrentDocumentTitle(loadedDocumentState.title);
@@ -240,25 +330,36 @@ export default function MainApp({}: MainAppProps) {
       setTranscriptions(loadedTranscriptions); // Use the hook's setter
       setAttachments([]); // Clear any local attachments when loading
       setApiError(null); // Clear any previous errors
+      // Clear localStorage when loading from history to prevent stale state persistence
+      localStorage.removeItem(LOCAL_STORAGE_KEY);
+      console.log("MainApp: Cleared localStorage due to loading from history.");
     } else {
-      // Handle the case where loadedDocumentState is null (e.g., "New Document" clicked)
-      console.log("MainApp: Resetting state for New Document.");
-      setCurrentDocumentId(null);
-      setCurrentDocumentTitle('');
-      // Reset selections to defaults if desired, or keep them
-      // setSelectedLanguage('en-US');
-      // setOutputLanguage('en');
-      setSelectedDocType('');
-      setGeneratedContent('');
-      // setSelectedFormat('DOCX');
-      setTranscriptions([]); // Clear transcriptions using the hook's setter
-      setAttachments([]); // Clear attachments
-      setApiError(null); // Clear errors
-      setIsLoading(false); // Reset loading states
-      setIsDownloading(false);
-      setIsSaving(false);
+      // --- Handle "New Document" ---
+      // This 'else' block runs when loadedDocumentState is null.
+      // We only reset if the initial load is complete, to distinguish
+      // from the very first render before localStorage is checked.
+      if (isInitialLoadComplete) {
+          console.log("MainApp: Resetting state for New Document.");
+          setCurrentDocumentId(null);
+          setCurrentDocumentTitle('');
+          // Reset selections to defaults if desired, or keep them
+          // setSelectedLanguage('en-US');
+          // setOutputLanguage('en');
+          setSelectedDocType('');
+          setGeneratedContent('');
+          // setSelectedFormat('DOCX');
+          setTranscriptions([]); // Clear transcriptions using the hook's setter
+          setAttachments([]); // Clear attachments
+          setApiError(null); // Clear errors
+          setIsLoading(false); // Reset loading states
+          setIsDownloading(false);
+          setIsSaving(false);
+          // Clear localStorage for a truly new document
+          localStorage.removeItem(LOCAL_STORAGE_KEY);
+          console.log("MainApp: Cleared localStorage for New Document.");
+      }
     }
-  }, [loadedDocumentState, setTranscriptions]); // Add setTranscriptions dependency
+  }, [loadedDocumentState, setTranscriptions, isInitialLoadComplete]); // Add isInitialLoadComplete dependency
 
 
   // --- Generate Content Logic ---
