@@ -62,11 +62,12 @@ export default function PreviewArea({
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <div className="grid w-full gap-1.5">
-          <Label htmlFor="preview-area">
+        {/* Wrap the editor directly within the Label */}
+        <Label className="grid w-full gap-1.5">
+          <span> {/* Span to hold the label text */}
             Preview (Editable)
             <span className="text-muted-foreground text-xs">{statusText}</span>
-          </Label>
+          </span>
           {/* Optional Title Input - kept commented out as in original */}
           {/* <Input
              value={currentDocumentTitle}
@@ -76,12 +77,12 @@ export default function PreviewArea({
              disabled={isSaving || isLoading || isRegenerating}
           /> */}
           <RichTextPreviewEditor
-            id="preview-area"
+            // Remove id prop as it's no longer needed for label association
             value={generatedContent}
             onChange={onContentChange}
             // readOnly={isLoading || isRegenerating || isSaving} // Add readOnly based on states if needed
           />
-        </div>
+        </Label>
       </CardContent>
     </>
   );
