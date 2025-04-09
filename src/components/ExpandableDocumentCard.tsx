@@ -273,7 +273,7 @@ export function ExpandableDocumentCard({ document }: ExpandableDocumentCardProps
            />
          </div>
          {/* Footer - Standard tooltip implementation */}
-         <DialogFooter className="px-6 py-4 border-t bg-background sm:justify-end flex-shrink-0 sm:rounded-b-lg space-x-2">
+         <DialogFooter className="flex flex-row justify-end px-6 py-4 border-t bg-background flex-shrink-0 sm:rounded-b-lg space-x-2">
            <TooltipProvider delayDuration={100}>
              {/* Download Button Tooltip */}
              <Tooltip>
