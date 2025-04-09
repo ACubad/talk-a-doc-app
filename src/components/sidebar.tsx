@@ -3,6 +3,7 @@
 import { cn } from "../lib/utils"; // Corrected import path
 import Link, { LinkProps } from "next/link";
 import React, { useState, createContext, useContext, useEffect, useCallback, FC } from "react"; // Added FC
+import { useRouter } from 'next/navigation'; // Import useRouter
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Menu,
@@ -163,6 +164,7 @@ export const DesktopSidebar: FC<DesktopSidebarProps> = ({
   // Get onLoadDocument from context
   const { open, setOpen, animate, onLoadDocument } = useSidebar();
   const { handleNewDocument } = useAppContext(); // Get handleNewDocument from AppContext
+  const router = useRouter(); // Initialize router
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -205,6 +207,7 @@ export const DesktopSidebar: FC<DesktopSidebarProps> = ({
       }
       const data: LoadedDocumentData = await response.json();
       onLoadDocument(data);
+      router.push('/'); // Navigate to main page after loading
     } catch (error) {
       console.error(`Error loading document ${documentId}:`, error);
       setHistoryError(error instanceof Error ? error.message : "Unknown error loading document");
@@ -338,6 +341,7 @@ export const MobileSidebar: FC<MobileSidebarProps> = ({
   // Get onLoadDocument from context
   const { open, setOpen, onLoadDocument } = useSidebar();
   const { handleNewDocument } = useAppContext(); // Get handleNewDocument from AppContext
+  const router = useRouter(); // Initialize router
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -380,6 +384,7 @@ export const MobileSidebar: FC<MobileSidebarProps> = ({
       }
       const data: LoadedDocumentData = await response.json();
       onLoadDocument(data);
+      router.push('/'); // Navigate to main page after loading
       setOpen(false); // Close mobile sidebar after loading
     } catch (error) {
       console.error(`Error loading document ${documentId}:`, error);
