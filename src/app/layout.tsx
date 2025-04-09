@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google"; // Corrected font import name if needed
 import "./globals.css";
+import { ThemeProvider } from "next-themes"; // Import ThemeProvider
 // Remove direct imports of SidebarBody, SidebarLink, etc. as they are handled internally now
 // import {
 //   Sidebar,
@@ -44,13 +45,22 @@ export default async function RootLayout({ // Make async
   const { data: { user } } = await supabase.auth.getUser(); // Revert getUser call
 
   return (
-    <html lang="en">
+    // Add suppressHydrationWarning to html tag for next-themes
+    <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        {/* Use AppLayout to wrap the content */}
-        {/* Pass user object and children */}
-        <AppLayout user={user}>
-          {children}
-        </AppLayout>
+        {/* Wrap AppLayout with ThemeProvider */}
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          {/* Use AppLayout to wrap the content */}
+          {/* Pass user object and children */}
+          <AppLayout user={user}>
+            {children}
+          </AppLayout>
+        </ThemeProvider>
       </body>
     </html>
   );
