@@ -1,15 +1,20 @@
 "use client";
 
-import React, { useState, useCallback, createContext, useContext } from 'react'; // Added createContext, useContext
+import React, { useState, useCallback, createContext, useContext, useEffect } from 'react'; // Added useEffect
 import { SidebarBody, SidebarProvider } from "./sidebar"; // Import SidebarBody and SidebarProvider
 import type { LoadedDocumentData } from "./sidebar"; // Import the type definition
 import AuthForm from './AuthForm'; // Import the AuthForm component
+import { createClientClient } from '@/lib/supabaseBrowserClient'; // Import Supabase client
 
 // Define the shape of the context data
+// Define the shape of the context data including profile info
 interface AppContextType {
   loadedDocumentState: CurrentDocumentState | null;
   handleLoadDocument: (data: LoadedDocumentData) => void;
   handleNewDocument: () => void;
+  username: string | null; // Add username state
+  avatarUrl: string | null; // Add avatar URL state
+  updateUserProfile: (profile: { username?: string | null; avatar_url?: string | null }) => void; // Add update function
 }
 
 // Create the context with a default value (or null/undefined)
@@ -45,8 +50,40 @@ interface CurrentDocumentState {
 }
 
 export default function AppLayout({ children, user }: AppLayoutProps) {
+  const supabase = createClientClient(); // Initialize Supabase client
   // State to hold the data of the document loaded from history
   const [loadedDocumentState, setLoadedDocumentState] = useState<CurrentDocumentState | null>(null);
+  // State for global user profile info
+  const [username, setUsername] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  // Fetch initial profile data (username, avatar) on mount if user exists
+  useEffect(() => {
+    if (user) {
+      const fetchInitialProfile = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('username, avatar_url')
+            .eq('id', user.id)
+            .single();
+
+          if (error && error.code !== 'PGRST116') { // Ignore 'no rows' error
+            throw error;
+          }
+
+          if (data) {
+            setUsername(data.username);
+            setAvatarUrl(data.avatar_url);
+          }
+        } catch (err) {
+          console.error("Error fetching initial profile:", err);
+          // Handle error appropriately, maybe show a notification
+        }
+      };
+      fetchInitialProfile();
+    }
+  }, [user, supabase]); // Re-run if user or supabase client changes
 
   // Callback function passed to the Sidebar
   const handleLoadDocument = useCallback((data: LoadedDocumentData) => {
@@ -87,6 +124,17 @@ export default function AppLayout({ children, user }: AppLayoutProps) {
       // Potentially reset other relevant states if needed
   }, []);
 
+  // Function to update global profile state (called from ProfileEditDialog)
+  const updateUserProfile = useCallback((profile: { username?: string | null; avatar_url?: string | null }) => {
+    console.log("AppLayout: Updating global profile state", profile);
+    if (profile.username !== undefined) {
+      setUsername(profile.username);
+    }
+    if (profile.avatar_url !== undefined) {
+      setAvatarUrl(profile.avatar_url);
+    }
+  }, []);
+
 
   // If user is not logged in, show the AuthForm
   if (!user) {
@@ -99,11 +147,14 @@ export default function AppLayout({ children, user }: AppLayoutProps) {
 
   // If user is logged in, render the main application layout
 
-  // Create the context value
+  // Create the context value, including profile state and update function
   const contextValue: AppContextType = {
     loadedDocumentState,
     handleLoadDocument,
     handleNewDocument,
+    username,
+    avatarUrl,
+    updateUserProfile,
   };
 
   return (

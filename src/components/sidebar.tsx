@@ -19,6 +19,8 @@ import { ScrollArea } from "../components/ui/scroll-area";
 import LogoutButton from "./LogoutButton";
 import { Button } from "./ui/button"; // Import Button for history items
 import { useAppContext } from "./AppLayout"; // Import App context hook
+import { Dialog } from "@/components/ui/dialog"; // Import Dialog
+import { ProfileEditDialogContent, DialogTrigger } from "@/components/ProfileEditDialog"; // Import Profile Dialog components
 
 // Define types for history items and loaded documents
 interface HistoryItem {
@@ -163,7 +165,8 @@ export const DesktopSidebar: FC<DesktopSidebarProps> = ({
 }) => {
   // Get onLoadDocument from context
   const { open, setOpen, animate, onLoadDocument } = useSidebar();
-  const { handleNewDocument } = useAppContext(); // Get handleNewDocument from AppContext
+  // Get profile info and handleNewDocument from AppContext
+  const { handleNewDocument, username, avatarUrl } = useAppContext();
   const router = useRouter(); // Initialize router
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
@@ -305,13 +308,27 @@ export const DesktopSidebar: FC<DesktopSidebarProps> = ({
 
         {/* Bottom Static Section */}
         <div className="mt-auto">
-          {/* Restore conditional rendering for user name */}
-          <div className="flex items-center gap-2 mb-2 p-2 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 cursor-pointer">
-            <div className="w-6 h-6 bg-neutral-300 dark:bg-neutral-600 rounded-full flex-shrink-0"></div> {/* Profile Placeholder */}
-            {open && (
-              <span className="text-sm text-neutral-700 dark:text-neutral-200">User Name</span>
-            )}
-          </div>
+          {/* User Profile Section with Dialog */}
+          <Dialog>
+            <DialogTrigger asChild>
+              <div className="flex items-center gap-2 mb-2 p-2 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 cursor-pointer">
+                {/* Display actual avatar or placeholder */}
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt={username || 'User Avatar'} className="w-6 h-6 rounded-full flex-shrink-0 object-cover" />
+                ) : (
+                  <div className="w-6 h-6 bg-neutral-300 dark:bg-neutral-600 rounded-full flex-shrink-0"></div>
+                )}
+                {/* Display actual username or fallback */}
+                {open && (
+                  <span className="text-sm text-neutral-700 dark:text-neutral-200 truncate">
+                    {username || 'User'}
+                  </span>
+                )}
+              </div>
+            </DialogTrigger>
+            <ProfileEditDialogContent />
+          </Dialog>
+          {/* End User Profile Section */}
           <SidebarLink
             link={{
               label: "Settings",
@@ -340,7 +357,8 @@ export const MobileSidebar: FC<MobileSidebarProps> = ({
 }) => {
   // Get onLoadDocument from context
   const { open, setOpen, onLoadDocument } = useSidebar();
-  const { handleNewDocument } = useAppContext(); // Get handleNewDocument from AppContext
+  // Get profile info and handleNewDocument from AppContext
+  const { handleNewDocument, username, avatarUrl } = useAppContext();
   const router = useRouter(); // Initialize router
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
@@ -494,10 +512,25 @@ export const MobileSidebar: FC<MobileSidebarProps> = ({
 
                 {/* Bottom Static Section */}
                 <div className="mt-auto pb-4">
-                   <div className="flex items-center gap-2 mb-2 p-2 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 cursor-pointer">
-                     <div className="w-6 h-6 bg-neutral-300 dark:bg-neutral-600 rounded-full flex-shrink-0"></div>
-                     <span className="text-sm text-neutral-700 dark:text-neutral-200">User Name</span>
-                   </div>
+                  {/* User Profile Section with Dialog - Mobile */}
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <div className="flex items-center gap-2 mb-2 p-2 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 cursor-pointer">
+                        {/* Display actual avatar or placeholder */}
+                        {avatarUrl ? (
+                          <img src={avatarUrl} alt={username || 'User Avatar'} className="w-6 h-6 rounded-full flex-shrink-0 object-cover" />
+                        ) : (
+                          <div className="w-6 h-6 bg-neutral-300 dark:bg-neutral-600 rounded-full flex-shrink-0"></div>
+                        )}
+                        {/* Display actual username or fallback */}
+                        <span className="text-sm text-neutral-700 dark:text-neutral-200 truncate">
+                          {username || 'User'}
+                        </span>
+                      </div>
+                    </DialogTrigger>
+                    <ProfileEditDialogContent />
+                  </Dialog>
+                  {/* End User Profile Section - Mobile */}
                   <SidebarLink
                     link={{
                       label: "Settings",
