@@ -5,16 +5,20 @@ import { SidebarBody, SidebarProvider } from "./sidebar"; // Import SidebarBody 
 import type { LoadedDocumentData } from "./sidebar"; // Import the type definition
 import AuthForm from './AuthForm'; // Import the AuthForm component
 import { createClientClient } from '@/lib/supabaseBrowserClient'; // Import Supabase client
+import { Dialog } from "@/components/ui/dialog"; // Import Dialog
+import { ProfileEditDialogContent } from "@/components/ProfileEditDialog"; // Import Profile Dialog Content
 
-// Define the shape of the context data
-// Define the shape of the context data including profile info
+// Define the shape of the context data including profile info and dialog state
 interface AppContextType {
   loadedDocumentState: CurrentDocumentState | null;
   handleLoadDocument: (data: LoadedDocumentData) => void;
   handleNewDocument: () => void;
-  username: string | null; // Add username state
-  avatarUrl: string | null; // Add avatar URL state
-  updateUserProfile: (profile: { username?: string | null; avatar_url?: string | null }) => void; // Add update function
+  username: string | null;
+  avatarUrl: string | null;
+  updateUserProfile: (profile: { username?: string | null; avatar_url?: string | null }) => void;
+  isProfileDialogOpen: boolean; // State for dialog visibility
+  setIsProfileDialogOpen: React.Dispatch<React.SetStateAction<boolean>>; // Setter for dialog state
+  openProfileDialog: () => void; // Function to open dialog
 }
 
 // Create the context with a default value (or null/undefined)
@@ -56,6 +60,7 @@ export default function AppLayout({ children, user }: AppLayoutProps) {
   // State for global user profile info
   const [username, setUsername] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false); // Add state for profile dialog
 
   // Fetch initial profile data (username, avatar) on mount if user exists
   useEffect(() => {
@@ -135,6 +140,11 @@ export default function AppLayout({ children, user }: AppLayoutProps) {
     }
   }, []);
 
+  // Function to open the profile dialog
+  const openProfileDialog = useCallback(() => {
+    setIsProfileDialogOpen(true);
+  }, []);
+
 
   // If user is not logged in, show the AuthForm
   if (!user) {
@@ -155,12 +165,20 @@ export default function AppLayout({ children, user }: AppLayoutProps) {
     username,
     avatarUrl,
     updateUserProfile,
+    isProfileDialogOpen, // Add dialog state
+    setIsProfileDialogOpen, // Add dialog setter
+    openProfileDialog, // Add function to open dialog
   };
 
   return (
     // Restore SidebarProvider
     <SidebarProvider onLoadDocument={handleLoadDocument}>
       <AppContext.Provider value={contextValue}>
+        {/* Render the Profile Dialog controlled by AppContext state */}
+        <Dialog open={isProfileDialogOpen} onOpenChange={setIsProfileDialogOpen}>
+          <ProfileEditDialogContent />
+        </Dialog>
+
         {/* Main layout container */}
         <div className="flex flex-col md:flex-row h-screen">
           {/* Restore SidebarBody */}

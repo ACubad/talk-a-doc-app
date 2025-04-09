@@ -19,8 +19,9 @@ import { ScrollArea } from "../components/ui/scroll-area";
 import LogoutButton from "./LogoutButton";
 import { Button } from "./ui/button"; // Import Button for history items
 import { useAppContext } from "./AppLayout"; // Import App context hook
-import { Dialog } from "@/components/ui/dialog"; // Import Dialog
-import { ProfileEditDialogContent, DialogTrigger } from "@/components/ProfileEditDialog"; // Import Profile Dialog components
+// Dialog related imports are no longer needed here for MobileSidebar profile
+import { Dialog, DialogTrigger } from "@/components/ui/dialog"; // Keep for DesktopSidebar
+import { ProfileEditDialogContent } from "@/components/ProfileEditDialog"; // Keep for DesktopSidebar
 
 // Define types for history items and loaded documents
 interface HistoryItem {
@@ -166,6 +167,7 @@ export const DesktopSidebar: FC<DesktopSidebarProps> = ({
   // Get onLoadDocument from context
   const { open, setOpen, animate, onLoadDocument } = useSidebar();
   // Get profile info and handleNewDocument from AppContext
+  // Note: openProfileDialog is not needed in DesktopSidebar
   const { handleNewDocument, username, avatarUrl } = useAppContext();
   const router = useRouter(); // Initialize router
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
@@ -357,13 +359,14 @@ export const MobileSidebar: FC<MobileSidebarProps> = ({
 }) => {
   // Get onLoadDocument from context
   const { open, setOpen, onLoadDocument } = useSidebar();
-  // Get profile info and handleNewDocument from AppContext
-  const { handleNewDocument, username, avatarUrl } = useAppContext();
+  // Get profile info, handleNewDocument, and openProfileDialog from AppContext
+  const { handleNewDocument, username, avatarUrl, openProfileDialog } = useAppContext(); // Added openProfileDialog
   const router = useRouter(); // Initialize router
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [isLoadingDoc, setIsLoadingDoc] = useState<string | null>(null);
+  // Removed isProfileDialogOpen state
 
   // Fetch history logic (remains the same)
   const fetchHistory = useCallback(async () => {
@@ -415,18 +418,19 @@ export const MobileSidebar: FC<MobileSidebarProps> = ({
   // JSX structure (remains the same)
   return (
     <>
+      {/* Mobile Header */}
       <div
         className={cn(
-          "h-10 px-4 py-4 flex flex-row md:hidden items-center justify-between bg-neutral-100 dark:bg-neutral-800 w-full"
+          "h-10 px-4 py-4 flex flex-row md:hidden items-center justify-start bg-neutral-100 dark:bg-neutral-800 w-full" // Changed justify-between to justify-start
         )}
         {...props}
       >
-        <div className="flex justify-end z-20 w-full">
-          <Menu
-            className="text-neutral-800 dark:text-neutral-200 cursor-pointer"
-            onClick={() => setOpen(!open)}
-          />
-        </div>
+        {/* Moved Menu icon out of the inner div and removed the inner div */}
+        <Menu
+          className="text-neutral-800 dark:text-neutral-200 cursor-pointer z-20" // Added z-20 here
+          onClick={() => setOpen(!open)}
+        />
+        {/* Removed the inner div: <div className="flex justify-end z-20 w-full"> */}
         <AnimatePresence>
           {open && (
             <motion.div
@@ -477,6 +481,7 @@ export const MobileSidebar: FC<MobileSidebarProps> = ({
                       href: "/docs",
                       icon: <FolderKanban className="w-4 h-4" />,
                     }}
+                    onClick={() => setOpen(false)} // Close mobile sidebar on Docs click
                   />
                 </div>
 
@@ -512,31 +517,35 @@ export const MobileSidebar: FC<MobileSidebarProps> = ({
 
                 {/* Bottom Static Section */}
                 <div className="mt-auto pb-4">
-                  {/* User Profile Section with Dialog - Mobile */}
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <div className="flex items-center gap-2 mb-2 p-2 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 cursor-pointer">
-                        {/* Display actual avatar or placeholder */}
-                        {avatarUrl ? (
-                          <img src={avatarUrl} alt={username || 'User Avatar'} className="w-6 h-6 rounded-full flex-shrink-0 object-cover" />
-                        ) : (
-                          <div className="w-6 h-6 bg-neutral-300 dark:bg-neutral-600 rounded-full flex-shrink-0"></div>
-                        )}
-                        {/* Display actual username or fallback */}
-                        <span className="text-sm text-neutral-700 dark:text-neutral-200 truncate">
-                          {username || 'User'}
-                        </span>
-                      </div>
-                    </DialogTrigger>
-                    <ProfileEditDialogContent />
-                  </Dialog>
-                  {/* End User Profile Section - Mobile */}
+                  {/* User Profile Section Display (Click triggers dialog via context AND closes sidebar) */}
+                  <div
+                    className="flex items-center gap-2 mb-2 p-2 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 cursor-pointer"
+                    onClick={() => {
+                      openProfileDialog(); // Call context function to open dialog
+                      setOpen(false); // Explicitly close sidebar
+                    }}
+                  >
+                    {/* Display actual avatar or placeholder */}
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt={username || 'User Avatar'} className="w-6 h-6 rounded-full flex-shrink-0 object-cover" />
+                    ) : (
+                      <div className="w-6 h-6 bg-neutral-300 dark:bg-neutral-600 rounded-full flex-shrink-0"></div>
+                    )}
+                    {/* Display actual username or fallback */}
+                    <span className="text-sm text-neutral-700 dark:text-neutral-200 truncate">
+                      {username || 'User'}
+                    </span>
+                  </div>
+                  {/* End User Profile Section Display */}
+                  {/* Removed the Dialog component from here */}
+
                   <SidebarLink
                     link={{
                       label: "Settings",
                       href: "/settings",
                       icon: <Settings className="w-4 h-4" />,
                     }}
+                    onClick={() => setOpen(false)} // Close mobile sidebar on Settings click
                   />
                   <LogoutButton />
                 </div>
