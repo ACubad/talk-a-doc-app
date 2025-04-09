@@ -1,34 +1,40 @@
 "use client";
 
-import { cn } from "../lib/utils"; // Corrected import path
+import { cn } from "../lib/utils";
 import Link, { LinkProps } from "next/link";
-import React, { useState, createContext, useContext, useEffect, useCallback, FC } from "react"; // Added FC
-import { useRouter } from 'next/navigation'; // Import useRouter
+import React, { useState, createContext, useContext, useEffect, useCallback, FC, useRef } from "react"; // Added useRef
+import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Menu,
-  Loader2, // Added Loader icon
+  Loader2,
   X,
   FilePenLine,
   Search,
   FolderKanban,
   Settings,
   LogOut,
+  MoreHorizontal, // Added for dropdown trigger
+  Edit3, // Added for Rename action
+  Trash2, // Added for Delete action
+  Pin, // Added for Pin action
+  PinOff, // Added for Unpin action
 } from "lucide-react";
 import { ScrollArea } from "../components/ui/scroll-area";
 import LogoutButton from "./LogoutButton";
-import { Button } from "./ui/button"; // Import Button for history items
-import { useAppContext } from "./AppLayout"; // Import App context hook
-// Dialog related imports are no longer needed here for MobileSidebar profile
-import { Dialog, DialogTrigger } from "@/components/ui/dialog"; // Keep for DesktopSidebar
-import { ProfileEditDialogContent } from "@/components/ProfileEditDialog"; // Keep for DesktopSidebar
+import { Button } from "./ui/button";
+import { Input } from "./ui/input"; // Added for inline rename
+import { useAppContext, DocumentSummary } from "./AppLayout"; // Import App context hook and DocumentSummary type
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"; // Added DropdownMenu components
+import { Dialog, DialogTrigger } from "@/components/ui/dialog";
+import { ProfileEditDialogContent } from "@/components/ProfileEditDialog";
 
-// Define types for history items and loaded documents
-interface HistoryItem {
-  id: string;
-  title: string;
-  updated_at: string;
-}
+// HistoryItem type is no longer needed, use DocumentSummary from AppContext
 
 // Define the structure for the loaded document data (matching the load API response)
 // Export this interface so other components can use it
@@ -57,206 +63,172 @@ interface Links {
   icon: React.JSX.Element | React.ReactNode;
 }
 
-// Define context props including the callback
-interface SidebarContextProps {
-  open: boolean;
-  setOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  animate: boolean;
-  onLoadDocument?: (data: LoadedDocumentData) => void; // Add to context
-}
+// SidebarContext is no longer needed as state is managed by AppContext
 
-// Create context
-const SidebarContext = createContext<SidebarContextProps | undefined>(undefined);
+// Custom hook to use sidebar context (REMOVED)
+// export const useSidebar = () => { ... };
 
-// Custom hook to use sidebar context
-export const useSidebar = () => {
-  const context = useContext(SidebarContext);
-  if (!context) {
-    throw new Error("useSidebar must be used within a SidebarProvider");
-  }
-  return context;
-};
+// SidebarProvider component (REMOVED)
+// export const SidebarProvider: FC<SidebarProviderProps> = ({ ... }) => { ... };
 
-// Define props for SidebarProvider
-interface SidebarProviderProps {
-  children: React.ReactNode;
-  open?: boolean;
-  setOpen?: React.Dispatch<React.SetStateAction<boolean>>;
-  animate?: boolean;
-  onLoadDocument?: (data: LoadedDocumentData) => void; // Accept callback prop here
-}
+// Define props for the main Sidebar component (REMOVED - No longer needed as wrapper)
+// interface SidebarProps { ... }
 
-// SidebarProvider component
-export const SidebarProvider: FC<SidebarProviderProps> = ({
-  children,
-  open: openProp,
-  setOpen: setOpenProp,
-  animate = true,
-  onLoadDocument, // Destructure the callback prop
-}) => {
-  // Default open state back to false
-  const [openState, setOpenState] = useState(false);
+// Main Sidebar component (REMOVED - No longer needed as wrapper)
+// export const Sidebar: FC<SidebarProps> = ({ ... }) => { ... };
 
-  // Allow parent to control open state (though default is now false)
-  const open = openProp !== undefined ? openProp : openState;
-  const setOpen = setOpenProp !== undefined ? setOpenProp : setOpenState;
+// SidebarBody component - Now the main entry point, uses AppContext directly
+export const SidebarBody = () => {
+  // State for controlling sidebar open/closed (for hover effect on desktop)
+  const [isHoverOpen, setIsHoverOpen] = useState(false);
+  // State for controlling mobile sidebar open/closed
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
 
-  // Create the context value including the callback
-  const contextValue: SidebarContextProps = {
-    open,
-    setOpen,
-    animate,
-    onLoadDocument // Assign the prop to the context field
-  };
+  // Get necessary state and functions from AppContext
+  const { handleLoadDocument } = useAppContext();
 
-  return (
-    <SidebarContext.Provider value={contextValue}>
-      {children}
-    </SidebarContext.Provider>
-  );
-};
-
-// Define props for the main Sidebar component
-interface SidebarProps {
-  children?: React.ReactNode; // Children might not be needed if structure is internal
-  open?: boolean;
-  setOpen?: React.Dispatch<React.SetStateAction<boolean>>;
-  animate?: boolean;
-  onLoadDocument?: (data: LoadedDocumentData) => void; // Accept callback prop here too
-}
-
-// Main Sidebar component
-export const Sidebar: FC<SidebarProps> = ({
-  children,
-  open,
-  setOpen,
-  animate,
-  onLoadDocument, // Destructure callback prop
-}) => {
-  return (
-    // Pass onLoadDocument to the Provider
-    <SidebarProvider open={open} setOpen={setOpen} animate={animate} onLoadDocument={onLoadDocument}>
-      {/* SidebarBody no longer needs onLoadDocument prop or children */}
-      <SidebarBody /> {/* Removed {children} */}
-    </SidebarProvider>
-  );
-};
-
-// SidebarBody component - Remove unused children prop
-export const SidebarBody = () => { // Removed children prop
   return (
     <>
-      {/* Desktop/Mobile sidebars will get onLoadDocument from context */}
-      <DesktopSidebar />
-      <MobileSidebar />
+      {/* Pass state and setters down */}
+      <DesktopSidebar
+        isHoverOpen={isHoverOpen}
+        setIsHoverOpen={setIsHoverOpen}
+        onLoadDocument={handleLoadDocument} // Pass load handler
+      />
+      <MobileSidebar
+        isMobileOpen={isMobileOpen}
+        setIsMobileOpen={setIsMobileOpen}
+        onLoadDocument={handleLoadDocument} // Pass load handler
+      />
     </>
   );
 };
 
-// Define props for DesktopSidebar (excluding onLoadDocument)
-type DesktopSidebarProps = React.ComponentProps<typeof motion.div> & {
-    children?: React.ReactNode; // Keep children prop if layout.tsx still passes structure
-};
+// Define props for DesktopSidebar
+interface DesktopSidebarProps extends React.ComponentProps<typeof motion.div> {
+    isHoverOpen: boolean;
+    setIsHoverOpen: React.Dispatch<React.SetStateAction<boolean>>;
+    onLoadDocument: (data: LoadedDocumentData) => void; // Receive load handler
+}
 
 // DesktopSidebar component
 export const DesktopSidebar: FC<DesktopSidebarProps> = ({
   className,
-  children,
+  isHoverOpen,
+  setIsHoverOpen,
+  onLoadDocument, // Receive load handler
   ...props
 }) => {
-  // Get onLoadDocument from context
-  const { open, setOpen, animate, onLoadDocument } = useSidebar();
-  // Get profile info and handleNewDocument from AppContext
-  // Note: openProfileDialog is not needed in DesktopSidebar
-  const { handleNewDocument, username, avatarUrl } = useAppContext();
-  const router = useRouter(); // Initialize router
-  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
-  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
-  const [historyError, setHistoryError] = useState<string | null>(null);
-  const [isLoadingDoc, setIsLoadingDoc] = useState<string | null>(null);
+  // Get state and actions from AppContext
+  const {
+    handleNewDocument,
+    username,
+    avatarUrl,
+    documents, // Use documents from context
+    isDocumentsLoading, // Use loading state from context
+    documentsError, // Use error state from context
+    deleteDocument, // Use delete action from context
+    renameDocument, // Use rename action from context
+    pinDocument, // Use pin action from context
+  } = useAppContext();
 
-  // Fetch history logic (remains the same)
-  const fetchHistory = useCallback(async () => {
-    setIsHistoryLoading(true);
-    setHistoryError(null);
-    try {
-      const response = await fetch('/api/documents/list');
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Failed to fetch history: ${response.status}`);
-      }
-      const data: HistoryItem[] = await response.json();
-      setHistoryItems(data);
-    } catch (error) {
-      console.error("Error fetching history:", error);
-      setHistoryError(error instanceof Error ? error.message : "Unknown error fetching history");
-    } finally {
-      setIsHistoryLoading(false);
-    }
-  }, []);
+  const router = useRouter();
+  const [isLoadingDoc, setIsLoadingDoc] = useState<string | null>(null); // Keep local loading state for individual doc load click
+  const [renamingDocId, setRenamingDocId] = useState<string | null>(null); // State to track which doc is being renamed
+  const [renameValue, setRenameValue] = useState(''); // State for the rename input value
+  const renameInputRef = useRef<HTMLInputElement>(null); // Ref for the rename input
 
-  useEffect(() => {
-    fetchHistory();
-  }, [fetchHistory]);
-
-  // Handle loading document logic (remains the same, uses onLoadDocument from context)
-  const handleLoadDocument = async (documentId: string) => {
-    if (!onLoadDocument) return;
+  // Handle loading document logic (uses onLoadDocument prop)
+  const handleLoadDocumentClick = async (documentId: string) => {
     setIsLoadingDoc(documentId);
-    setHistoryError(null);
+    // Error state is handled globally in AppContext now
     try {
       const response = await fetch(`/api/documents/load/${documentId}`);
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({ error: 'Failed to parse error JSON' }));
         throw new Error(errorData.error || `Failed to load document: ${response.status}`);
       }
       const data: LoadedDocumentData = await response.json();
-      onLoadDocument(data);
+      onLoadDocument(data); // Call the passed-in handler
       router.push('/'); // Navigate to main page after loading
     } catch (error) {
       console.error(`Error loading document ${documentId}:`, error);
-      setHistoryError(error instanceof Error ? error.message : "Unknown error loading document");
+      // Display error through global state (AppContext already sets documentsError)
     } finally {
       setIsLoadingDoc(null);
     }
   };
 
-  // Restore conditional padding/alignment
+  // Start renaming
+  const handleStartRename = (doc: DocumentSummary) => {
+    setRenamingDocId(doc.id);
+    setRenameValue(doc.title);
+    // Focus the input after a short delay to allow it to render
+    setTimeout(() => renameInputRef.current?.focus(), 0);
+  };
+
+  // Cancel renaming
+  const handleCancelRename = () => {
+    setRenamingDocId(null);
+    setRenameValue('');
+  };
+
+  // Submit rename
+  const handleRenameSubmit = async (docId: string) => {
+    if (!renameValue.trim() || renameValue.trim() === documents.find(d => d.id === docId)?.title) {
+      handleCancelRename(); // Cancel if name is empty, unchanged, or just whitespace
+      return;
+    }
+    await renameDocument(docId, renameValue.trim()); // Call context action
+    handleCancelRename(); // Reset renaming state
+  };
+
+  // Handle Enter key press in rename input
+  const handleRenameKeyDown = (event: React.KeyboardEvent<HTMLInputElement>, docId: string) => {
+    if (event.key === 'Enter') {
+      handleRenameSubmit(docId);
+    } else if (event.key === 'Escape') {
+      handleCancelRename();
+    }
+  };
+
+
+  // Conditional styles based on hover state
+  const open = isHoverOpen; // Use isHoverOpen for conditional rendering/styling
+  const setOpen = setIsHoverOpen; // Use setIsHoverOpen for hover handlers
+  const animate = true; // Keep animation enabled
   const paddingX = open ? "px-4" : "px-3";
   const alignItems = !open ? "items-center" : "";
 
   // JSX structure
   return (
     <motion.div
-      // Restore conditional styles and animation/hover handlers
       className={cn(
         "h-full py-4 hidden md:flex md:flex-col bg-neutral-100 dark:bg-neutral-800 w-[300px] flex-shrink-0 overflow-hidden",
-        paddingX, // Restore conditional padding
-        alignItems, // Restore conditional alignment
+        paddingX,
+        alignItems,
         className
       )}
-      // Restore animation and hover handlers
       animate={{
         width: animate ? (open ? "300px" : "60px") : "300px",
       }}
-      onMouseEnter={() => setOpen(true)} // Restore
-      onMouseLeave={() => setOpen(false)} // Restore
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
       {...props}
     >
-      {/* Restore conditional padding */}
       <div className={cn("flex flex-col h-full", !open ? "p-3" : "p-4")}>
         {/* Top Static Section */}
         <div>
-          {/* Add onClick handler specifically for New Document */}
           <SidebarLink
             link={{
               label: "New Document",
               href: "/",
               icon: <FilePenLine className="w-4 h-4" />,
             }}
-            onClick={handleNewDocument} // Call the context function on click
+            onClick={handleNewDocument}
+            isOpen={open} // Pass open state
+            animate={animate} // Pass animate state
           />
-          {/* Restore conditional rendering */}
           {open && (
             <div className="relative my-4">
               <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-neutral-500 w-4 h-4" />
@@ -273,36 +245,89 @@ export const DesktopSidebar: FC<DesktopSidebarProps> = ({
               href: "/docs",
               icon: <FolderKanban className="w-4 h-4" />,
             }}
+            isOpen={open} // Pass open state
+            animate={animate} // Pass animate state
           />
         </div>
 
-        {/* Middle Scrollable History Section - Restore conditional rendering */}
+        {/* Middle Scrollable History Section - Use AppContext state */}
         {open && (
           <ScrollArea className="flex-grow my-4 border-t border-b border-neutral-200 dark:border-neutral-700">
             <div className="p-2">
               <h3 className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase mb-2">History</h3>
-              {isHistoryLoading && (
+              {isDocumentsLoading && (
                 <div className="flex items-center justify-center p-2 text-sm text-neutral-500">
                   <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading...
                 </div>
               )}
-              {historyError && (
-                <div className="p-2 text-sm text-red-600 dark:text-red-400">Error: {historyError}</div>
+              {documentsError && (
+                <div className="p-2 text-sm text-red-600 dark:text-red-400">Error: {documentsError}</div>
               )}
-              {!isHistoryLoading && !historyError && historyItems.length === 0 && (
+              {!isDocumentsLoading && !documentsError && documents.length === 0 && (
                  <div className="p-2 text-sm text-neutral-500">No saved documents found.</div>
               )}
-              {!isHistoryLoading && !historyError && historyItems.map(item => (
-                <Button
-                  key={item.id}
-                  variant="ghost"
-                  className="w-full justify-start text-sm py-1 px-2 h-auto font-normal text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700"
-                  onClick={() => handleLoadDocument(item.id)}
-                  disabled={isLoadingDoc === item.id}
-                >
-                  {isLoadingDoc === item.id && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                  {item.title || 'Untitled Document'}
-                </Button>
+              {!isDocumentsLoading && !documentsError && documents.map(doc => (
+                <div key={doc.id} className="group relative flex items-center justify-between rounded hover:bg-neutral-200 dark:hover:bg-neutral-700">
+                  {renamingDocId === doc.id ? (
+                    // Inline Rename Input
+                    <Input
+                      ref={renameInputRef}
+                      type="text"
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onKeyDown={(e) => handleRenameKeyDown(e, doc.id)}
+                      onBlur={() => handleRenameSubmit(doc.id)} // Save on blur as well
+                      className="flex-grow h-auto py-1 px-2 text-sm font-normal text-neutral-700 dark:text-neutral-300 bg-transparent border border-blue-500 focus:outline-none focus:ring-0"
+                    />
+                  ) : (
+                    // Document Title Button (loads doc)
+                    <Button
+                      variant="ghost"
+                      className="flex-grow justify-start text-sm py-1 px-2 h-auto font-normal text-neutral-700 dark:text-neutral-300 truncate" // Added truncate
+                      onClick={() => handleLoadDocumentClick(doc.id)}
+                      disabled={isLoadingDoc === doc.id}
+                      title={doc.title || 'Untitled Document'} // Add title attribute for tooltip on hover
+                    >
+                      {isLoadingDoc === doc.id && <Loader2 className="h-4 w-4 animate-spin mr-2 flex-shrink-0" />}
+                      {doc.pinned && <Pin className="h-3 w-3 mr-1.5 text-blue-500 flex-shrink-0" />}
+                      <span className="truncate">{doc.title || 'Untitled Document'}</span>
+                    </Button>
+                  )}
+
+                  {/* Actions Dropdown (only shown if not renaming) */}
+                  {renamingDocId !== doc.id && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100 focus:opacity-100 flex-shrink-0" // Show on hover/focus
+                          aria-label="Document actions"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-40">
+                        <DropdownMenuItem onSelect={() => handleStartRename(doc)}>
+                          <Edit3 className="mr-2 h-4 w-4" />
+                          <span>Rename</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => pinDocument(doc.id)}>
+                          {doc.pinned ? (
+                            <PinOff className="mr-2 h-4 w-4" />
+                          ) : (
+                            <Pin className="mr-2 h-4 w-4" />
+                          )}
+                          <span>{doc.pinned ? 'Unpin' : 'Pin'}</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => deleteDocument(doc.id)} className="text-red-600 focus:text-red-600 dark:focus:text-red-400">
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          <span>Delete</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
               ))}
             </div>
           </ScrollArea>
@@ -314,13 +339,11 @@ export const DesktopSidebar: FC<DesktopSidebarProps> = ({
           <Dialog>
             <DialogTrigger asChild>
               <div className="flex items-center gap-2 mb-2 p-2 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 cursor-pointer">
-                {/* Display actual avatar or placeholder */}
                 {avatarUrl ? (
                   <img src={avatarUrl} alt={username || 'User Avatar'} className="w-6 h-6 rounded-full flex-shrink-0 object-cover" />
                 ) : (
                   <div className="w-6 h-6 bg-neutral-300 dark:bg-neutral-600 rounded-full flex-shrink-0"></div>
                 )}
-                {/* Display actual username or fallback */}
                 {open && (
                   <span className="text-sm text-neutral-700 dark:text-neutral-200 truncate">
                     {username || 'User'}
@@ -330,15 +353,15 @@ export const DesktopSidebar: FC<DesktopSidebarProps> = ({
             </DialogTrigger>
             <ProfileEditDialogContent />
           </Dialog>
-          {/* End User Profile Section */}
           <SidebarLink
             link={{
               label: "Settings",
               href: "/settings",
               icon: <Settings className="w-4 h-4" />,
             }}
+            isOpen={open} // Pass open state
+            animate={animate} // Pass animate state
           />
-          {/* Pass original open state to LogoutButton */}
           <LogoutButton open={open} />
         </div>
       </div>
@@ -346,93 +369,110 @@ export const DesktopSidebar: FC<DesktopSidebarProps> = ({
   );
 };
 
-// Define props for MobileSidebar (excluding onLoadDocument)
-type MobileSidebarProps = React.ComponentProps<"div"> & {
-    children?: React.ReactNode; // Keep children prop if layout.tsx still passes structure
-};
+// Define props for MobileSidebar
+interface MobileSidebarProps extends React.ComponentProps<"div"> {
+    isMobileOpen: boolean;
+    setIsMobileOpen: React.Dispatch<React.SetStateAction<boolean>>;
+    onLoadDocument: (data: LoadedDocumentData) => void; // Receive load handler
+}
 
 // MobileSidebar component
 export const MobileSidebar: FC<MobileSidebarProps> = ({
   className,
-  children,
+  isMobileOpen,
+  setIsMobileOpen,
+  onLoadDocument, // Receive load handler
   ...props
 }) => {
-  // Get onLoadDocument from context
-  const { open, setOpen, onLoadDocument } = useSidebar();
-  // Get profile info, handleNewDocument, and openProfileDialog from AppContext
-  const { handleNewDocument, username, avatarUrl, openProfileDialog } = useAppContext(); // Added openProfileDialog
-  const router = useRouter(); // Initialize router
-  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
-  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
-  const [historyError, setHistoryError] = useState<string | null>(null);
-  const [isLoadingDoc, setIsLoadingDoc] = useState<string | null>(null);
-  // Removed isProfileDialogOpen state
+  // Get state and actions from AppContext
+  const {
+    handleNewDocument,
+    username,
+    avatarUrl,
+    openProfileDialog,
+    documents, // Use documents from context
+    isDocumentsLoading, // Use loading state from context
+    documentsError, // Use error state from context
+    deleteDocument, // Use delete action from context
+    renameDocument, // Use rename action from context
+    pinDocument, // Use pin action from context
+  } = useAppContext();
 
-  // Fetch history logic (remains the same)
-  const fetchHistory = useCallback(async () => {
-    setIsHistoryLoading(true);
-    setHistoryError(null);
-    try {
-      const response = await fetch('/api/documents/list');
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Failed to fetch history: ${response.status}`);
-      }
-      const data: HistoryItem[] = await response.json();
-      setHistoryItems(data);
-    } catch (error) {
-      console.error("Error fetching history:", error);
-      setHistoryError(error instanceof Error ? error.message : "Unknown error fetching history");
-    } finally {
-      setIsHistoryLoading(false);
-    }
-  }, []);
+  const router = useRouter();
+  const [isLoadingDoc, setIsLoadingDoc] = useState<string | null>(null); // Keep local loading state
+  const [renamingDocId, setRenamingDocId] = useState<string | null>(null); // State for renaming
+  const [renameValue, setRenameValue] = useState(''); // State for rename input
+  const renameInputRef = useRef<HTMLInputElement>(null); // Ref for rename input
 
-  useEffect(() => {
-    fetchHistory();
-  }, [fetchHistory]);
-
-  // Handle loading document logic (remains the same, uses onLoadDocument from context)
-  const handleLoadDocument = async (documentId: string) => {
-    if (!onLoadDocument) return;
+  // Handle loading document logic (uses onLoadDocument prop)
+  const handleLoadDocumentClick = async (documentId: string) => {
     setIsLoadingDoc(documentId);
-    setHistoryError(null);
     try {
       const response = await fetch(`/api/documents/load/${documentId}`);
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({ error: 'Failed to parse error JSON' }));
         throw new Error(errorData.error || `Failed to load document: ${response.status}`);
       }
       const data: LoadedDocumentData = await response.json();
-      onLoadDocument(data);
-      router.push('/'); // Navigate to main page after loading
-      setOpen(false); // Close mobile sidebar after loading
+      onLoadDocument(data); // Call the passed-in handler
+      router.push('/'); // Navigate to main page
+      setIsMobileOpen(false); // Close mobile sidebar
     } catch (error) {
       console.error(`Error loading document ${documentId}:`, error);
-      setHistoryError(error instanceof Error ? error.message : "Unknown error loading document");
+      // Error handled globally
     } finally {
       setIsLoadingDoc(null);
     }
   };
 
-  // JSX structure (remains the same)
+   // Start renaming (Mobile)
+   const handleStartRename = (doc: DocumentSummary) => {
+    setRenamingDocId(doc.id);
+    setRenameValue(doc.title);
+    setTimeout(() => renameInputRef.current?.focus(), 0);
+  };
+
+  // Cancel renaming (Mobile)
+  const handleCancelRename = () => {
+    setRenamingDocId(null);
+    setRenameValue('');
+  };
+
+  // Submit rename (Mobile)
+  const handleRenameSubmit = async (docId: string) => {
+    if (!renameValue.trim() || renameValue.trim() === documents.find(d => d.id === docId)?.title) {
+      handleCancelRename();
+      return;
+    }
+    await renameDocument(docId, renameValue.trim());
+    handleCancelRename();
+  };
+
+  // Handle Enter key press in rename input (Mobile)
+  const handleRenameKeyDown = (event: React.KeyboardEvent<HTMLInputElement>, docId: string) => {
+    if (event.key === 'Enter') {
+      handleRenameSubmit(docId);
+    } else if (event.key === 'Escape') {
+      handleCancelRename();
+    }
+  };
+
+  // JSX structure
   return (
     <>
       {/* Mobile Header */}
       <div
         className={cn(
-          "h-10 px-4 py-4 flex flex-row md:hidden items-center justify-start bg-neutral-100 dark:bg-neutral-800 w-full" // Changed justify-between to justify-start
+          "h-10 px-4 py-4 flex flex-row md:hidden items-center justify-start bg-neutral-100 dark:bg-neutral-800 w-full"
         )}
         {...props}
       >
-        {/* Moved Menu icon out of the inner div and removed the inner div */}
         <Menu
-          className="text-neutral-800 dark:text-neutral-200 cursor-pointer z-20" // Added z-20 here
-          onClick={() => setOpen(!open)}
+          className="text-neutral-800 dark:text-neutral-200 cursor-pointer z-20"
+          onClick={() => setIsMobileOpen(!isMobileOpen)}
         />
-        {/* Removed the inner div: <div className="flex justify-end z-20 w-full"> */}
         <AnimatePresence>
-          {open && (
+          {isMobileOpen && (
             <motion.div
               initial={{ x: "-100%", opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
@@ -448,14 +488,13 @@ export const MobileSidebar: FC<MobileSidebarProps> = ({
             >
               <div
                 className="absolute right-10 top-10 z-50 text-neutral-800 dark:text-neutral-200 cursor-pointer"
-                onClick={() => setOpen(!open)}
+                onClick={() => setIsMobileOpen(!isMobileOpen)}
               >
                 <X />
               </div>
               <div className="flex flex-col h-full pt-10">
                 {/* Top Static Section */}
                 <div>
-                  {/* Add onClick handler specifically for New Document */}
                   <SidebarLink
                     link={{
                       label: "New Document",
@@ -463,9 +502,11 @@ export const MobileSidebar: FC<MobileSidebarProps> = ({
                       icon: <FilePenLine className="w-4 h-4" />,
                     }}
                     onClick={() => {
-                      handleNewDocument(); // Call context function
-                      setOpen(false); // Close mobile sidebar
+                      handleNewDocument();
+                      setIsMobileOpen(false);
                     }}
+                    isOpen={true} // Always open in mobile view
+                    animate={false} // No animation needed here
                   />
                   <div className="relative my-4">
                     <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 text-neutral-500 w-4 h-4" />
@@ -481,73 +522,117 @@ export const MobileSidebar: FC<MobileSidebarProps> = ({
                       href: "/docs",
                       icon: <FolderKanban className="w-4 h-4" />,
                     }}
-                    onClick={() => setOpen(false)} // Close mobile sidebar on Docs click
+                    onClick={() => setIsMobileOpen(false)}
+                    isOpen={true} // Always open in mobile view
+                    animate={false} // No animation needed here
                   />
                 </div>
 
-                {/* Middle Scrollable History Section - Mobile */}
+                {/* Middle Scrollable History Section - Mobile - Use AppContext state */}
                 <ScrollArea className="flex-grow my-4 border-t border-b border-neutral-200 dark:border-neutral-700">
                   <div className="p-2">
                     <h3 className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase mb-2">History</h3>
-                    {isHistoryLoading && (
+                    {isDocumentsLoading && (
                       <div className="flex items-center justify-center p-2 text-sm text-neutral-500">
                         <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading...
                       </div>
                     )}
-                    {historyError && (
-                      <div className="p-2 text-sm text-red-600 dark:text-red-400">Error: {historyError}</div>
+                    {documentsError && (
+                      <div className="p-2 text-sm text-red-600 dark:text-red-400">Error: {documentsError}</div>
                     )}
-                    {!isHistoryLoading && !historyError && historyItems.length === 0 && (
+                    {!isDocumentsLoading && !documentsError && documents.length === 0 && (
                        <div className="p-2 text-sm text-neutral-500">No saved documents found.</div>
                     )}
-                    {!isHistoryLoading && !historyError && historyItems.map(item => (
-                      <Button
-                        key={item.id}
-                        variant="ghost"
-                        className="w-full justify-start text-sm py-1 px-2 h-auto font-normal text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700"
-                        onClick={() => handleLoadDocument(item.id)}
-                        disabled={isLoadingDoc === item.id}
-                      >
-                        {isLoadingDoc === item.id && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                        {item.title || 'Untitled Document'}
-                      </Button>
+                    {!isDocumentsLoading && !documentsError && documents.map(doc => (
+                      <div key={doc.id} className="group relative flex items-center justify-between rounded hover:bg-neutral-200 dark:hover:bg-neutral-700">
+                        {renamingDocId === doc.id ? (
+                          // Inline Rename Input (Mobile)
+                          <Input
+                            ref={renameInputRef}
+                            type="text"
+                            value={renameValue}
+                            onChange={(e) => setRenameValue(e.target.value)}
+                            onKeyDown={(e) => handleRenameKeyDown(e, doc.id)}
+                            onBlur={() => handleRenameSubmit(doc.id)}
+                            className="flex-grow h-auto py-1 px-2 text-sm font-normal text-neutral-700 dark:text-neutral-300 bg-transparent border border-blue-500 focus:outline-none focus:ring-0"
+                          />
+                        ) : (
+                          // Document Title Button (Mobile)
+                          <Button
+                            variant="ghost"
+                            className="flex-grow justify-start text-sm py-1 px-2 h-auto font-normal text-neutral-700 dark:text-neutral-300 truncate"
+                            onClick={() => handleLoadDocumentClick(doc.id)}
+                            disabled={isLoadingDoc === doc.id}
+                            title={doc.title || 'Untitled Document'}
+                          >
+                            {isLoadingDoc === doc.id && <Loader2 className="h-4 w-4 animate-spin mr-2 flex-shrink-0" />}
+                            {doc.pinned && <Pin className="h-3 w-3 mr-1.5 text-blue-500 flex-shrink-0" />}
+                            <span className="truncate">{doc.title || 'Untitled Document'}</span>
+                          </Button>
+                        )}
+                        {/* Actions Dropdown (Mobile - always visible when not renaming) */}
+                        {renamingDocId !== doc.id && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 flex-shrink-0" // Always visible
+                                aria-label="Document actions"
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40">
+                              <DropdownMenuItem onSelect={() => handleStartRename(doc)}>
+                                <Edit3 className="mr-2 h-4 w-4" />
+                                <span>Rename</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onSelect={() => pinDocument(doc.id)}>
+                                {doc.pinned ? <PinOff className="mr-2 h-4 w-4" /> : <Pin className="mr-2 h-4 w-4" />}
+                                <span>{doc.pinned ? 'Unpin' : 'Pin'}</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onSelect={() => deleteDocument(doc.id)} className="text-red-600 focus:text-red-600 dark:focus:text-red-400">
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                <span>Delete</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </ScrollArea>
 
                 {/* Bottom Static Section */}
                 <div className="mt-auto pb-4">
-                  {/* User Profile Section Display (Click triggers dialog via context AND closes sidebar) */}
                   <div
                     className="flex items-center gap-2 mb-2 p-2 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 cursor-pointer"
                     onClick={() => {
-                      openProfileDialog(); // Call context function to open dialog
-                      setOpen(false); // Explicitly close sidebar
+                      openProfileDialog();
+                      setIsMobileOpen(false);
                     }}
                   >
-                    {/* Display actual avatar or placeholder */}
                     {avatarUrl ? (
                       <img src={avatarUrl} alt={username || 'User Avatar'} className="w-6 h-6 rounded-full flex-shrink-0 object-cover" />
                     ) : (
                       <div className="w-6 h-6 bg-neutral-300 dark:bg-neutral-600 rounded-full flex-shrink-0"></div>
                     )}
-                    {/* Display actual username or fallback */}
                     <span className="text-sm text-neutral-700 dark:text-neutral-200 truncate">
                       {username || 'User'}
                     </span>
                   </div>
-                  {/* End User Profile Section Display */}
-                  {/* Removed the Dialog component from here */}
-
                   <SidebarLink
                     link={{
                       label: "Settings",
                       href: "/settings",
                       icon: <Settings className="w-4 h-4" />,
                     }}
-                    onClick={() => setOpen(false)} // Close mobile sidebar on Settings click
+                    onClick={() => setIsMobileOpen(false)}
+                    isOpen={true} // Always open in mobile view
+                    animate={false} // No animation needed here
                   />
-                  <LogoutButton />
+                  <LogoutButton open={true} /> {/* Pass true as open state for mobile */}
                 </div>
               </div>
             </motion.div>
@@ -558,36 +643,40 @@ export const MobileSidebar: FC<MobileSidebarProps> = ({
   );
 };
 
-// SidebarLink component
+// SidebarLink component - Updated props
 export const SidebarLink = ({
   link,
   className,
-  onClick, // Add optional onClick prop
+  onClick,
+  isOpen, // Receive open state
+  animate, // Receive animate state
   ...props
 }: {
   link: Links;
   className?: string;
-  onClick?: () => void; // Define the prop type
+  onClick?: () => void;
+  isOpen: boolean; // Add prop type
+  animate: boolean; // Add prop type
   props?: LinkProps;
 }) => {
-  // Restore original logic using context 'open' state
-  const { open, animate } = useSidebar();
+  // Use passed-in state instead of context
+  const open = isOpen;
 
   return (
     <Link
       href={link.href}
       className={cn(
         "flex items-center gap-2 py-2",
-        open ? "justify-start" : "justify-center", // Restore conditional justify
+        open ? "justify-start" : "justify-center",
         className
       )}
-      onClick={onClick} // Add onClick handler to the Link
+      onClick={onClick}
       {...props}
     >
       {link.icon}
-      {/* Restore motion span for label animation */}
       <motion.span
         animate={{
+          // Use passed-in state for animation
           opacity: animate ? (open ? 1 : 0) : 1,
           width: animate ? (open ? "auto" : 0) : "auto",
         }}
