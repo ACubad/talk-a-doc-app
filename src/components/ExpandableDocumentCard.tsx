@@ -1,12 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react'; // Keep useState
 import { motion } from 'framer-motion';
-import { useExpandable } from '@/hooks/use-expandable';
+import { useExpandable } from '@/hooks/use-expandable'; // Keep useExpandable
 import { cn } from '@/lib/utils';
-import { Loader2, AlertCircle, ExternalLink, Download, Copy, Check, Trash2 } from 'lucide-react'; // Added Trash2 icon
-import type { DocumentSummary } from './AppLayout'; // Import DocumentSummary from AppLayout
-import type { LoadedDocumentData } from './sidebar'; // Import LoadedDocumentData from sidebar
+import { Loader2, AlertCircle, ExternalLink, Download, Copy, Check } from 'lucide-react';
+import type { LoadedDocumentData } from './sidebar';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -26,22 +25,26 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
-// Use DocumentSummary from AppLayout
-interface ExpandableDocumentCardProps {
-  document: DocumentSummary;
-  onDelete: () => Promise<void>; // Add onDelete prop
+// Corrected interface to match API data
+interface DocumentSummary {
+  id: string;
+  title: string;      // Use title
+  updated_at: string; // Use updated_at
 }
 
-export function ExpandableDocumentCard({ document, onDelete }: ExpandableDocumentCardProps) { // Destructure onDelete
+interface ExpandableDocumentCardProps {
+  document: DocumentSummary;
+}
+
+export function ExpandableDocumentCard({ document }: ExpandableDocumentCardProps) {
   const detailsContentRef = useRef<HTMLDivElement>(null);
-  const { isExpanded, toggleExpand } = useExpandable(false);
+  const { isExpanded, toggleExpand } = useExpandable(false); // Remove animatedHeight from hook usage
   const [fullDocumentData, setFullDocumentData] = useState<LoadedDocumentData | null>(null);
   const [isContentLoading, setIsContentLoading] = useState(false);
   const [contentError, setContentError] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false); // State for delete loading indicator
 
   // Fetch full document content when expanded
   useEffect(() => {
@@ -70,13 +73,10 @@ export function ExpandableDocumentCard({ document, onDelete }: ExpandableDocumen
     fetchFullDocument();
   }, [isExpanded, document.id, fullDocumentData, isContentLoading, contentError]);
 
+  // REMOVE useEffect for animatedHeight calculation
 
-  const handleToggleExpand = useCallback((e: React.MouseEvent) => {
-    // Prevent toggle if delete button is clicked
-    if ((e.target as HTMLElement).closest('.delete-button')) {
-      return;
-    }
-    toggleExpand();
+  const handleToggleExpand = useCallback(() => {
+    toggleExpand(); // Use toggleExpand from the hook
   }, [toggleExpand]);
 
   // Handle Copy Action
@@ -144,25 +144,6 @@ export function ExpandableDocumentCard({ document, onDelete }: ExpandableDocumen
     }
   }, [fullDocumentData]);
 
-  // Handle Delete Action
-  const handleDelete = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent card expansion when clicking delete
-    setIsDeleting(true);
-    try {
-      await onDelete(); // Call the passed-in delete function (which includes confirmation)
-      // No need to update local state here, AppContext handles it
-    } catch (error) {
-      console.error("Error during delete operation:", error);
-      // Error state is handled in AppContext, but could show local feedback too
-    } finally {
-      // Only set isDeleting to false if the component is still mounted
-      // (It might unmount immediately if deletion is successful)
-      // A slight delay can help visually, or rely on parent state update
-      // setIsDeleting(false); // Re-enable button if deletion fails and component remains
-    }
-  }, [onDelete]);
-
-
   // Prevent default focus behavior when modal opens
   const handleOpenAutoFocus = (event: Event) => {
     event.preventDefault();
@@ -193,8 +174,9 @@ export function ExpandableDocumentCard({ document, onDelete }: ExpandableDocumen
           aria-expanded={isExpanded}
           aria-controls={`details-${document.id}`}
         >
-          {/* Title and Date Section */}
-          <div className={cn("flex-grow overflow-hidden", !isExpanded && "text-center")}>
+          {/* Wrap title in Tooltip */}
+          {/* Added conditional text-center for collapsed state */}
+          <div className={cn("flex-grow overflow-hidden mr-2", !isExpanded && "text-center")}>
             <TooltipProvider delayDuration={100}>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -207,6 +189,7 @@ export function ExpandableDocumentCard({ document, onDelete }: ExpandableDocumen
                   </p>
                 </TooltipTrigger>
                 <TooltipContent>
+                  {/* Show full title in tooltip */}
                   <p>{document.title || 'Untitled Document'}</p>
                 </TooltipContent>
               </Tooltip>
@@ -215,41 +198,13 @@ export function ExpandableDocumentCard({ document, onDelete }: ExpandableDocumen
               Updated: {new Date(document.updated_at).toLocaleDateString()}
             </p>
           </div>
-
-          {/* Controls Section (Delete Button and Expander) */}
-          <div className="flex items-start flex-shrink-0 space-x-2 ml-2">
-             {/* Delete Button - Conditionally render based on isExpanded */}
-             {isExpanded && (
-               <TooltipProvider delayDuration={100}>
-                 <Tooltip>
-                   <TooltipTrigger asChild>
-                   <Button
-                     variant="ghost"
-                     size="icon"
-                     className="h-6 w-6 text-neutral-500 hover:text-red-500 dark:hover:text-red-400 delete-button" // Added delete-button class
-                     onClick={handleDelete}
-                     disabled={isDeleting}
-                     aria-label="Delete document"
-                   >
-                     {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                   </Button>
-                 </TooltipTrigger>
-                 <TooltipContent>
-                   <p>Delete</p>
-                   </TooltipContent>
-                 </Tooltip>
-               </TooltipProvider>
-             )}
-
-             {/* Expander Arrow */}
-             <motion.div
-                 animate={{ rotate: isExpanded ? 180 : 0 }}
-                 transition={{ duration: 0.2 }}
-                 className="text-neutral-500 mt-1" // Adjusted margin slightly
-             >
-                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-             </motion.div>
-          </div>
+          <motion.div
+              animate={{ rotate: isExpanded ? 180 : 0 }}
+              transition={{ duration: 0.2 }}
+              className="text-neutral-500 flex-shrink-0 mt-1"
+          >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </motion.div>
         </div>
 
         {/* Apply margin conditionally outside the motion div */}
