@@ -21,30 +21,30 @@ This file tracks the progress of the Talk A Doc application development.
 
 Use Markdown checkboxes (`- [ ]` for incomplete, `- [x]` for complete) to track progress.
 
-- [ ] **Refine Existing Features:**
-    - [ ] Enhance content generation quality/consistency.
-        - [x] Refine prompts to request more comprehensive output based on transcription.
-    - [ ] Refine UI/UX based on feedback.
-        - [x] Center icons in collapsed sidebar.
-        - [x] Ensure smooth text collapse in sidebar without pre-collapse visual changes.
-        - [x] Add UI element (e.g., '+' icon) to allow adding multiple audio inputs before final generation.
-        - [x] Make individual transcriptions editable in the UI.
-        - [x] Add UI element (e.g., 'X' icon) to allow removing individual transcription boxes.
-    - [x] Add more comprehensive error handling and reporting.
-- [ ] **Implement Sidebar Functionality (Depends on User Accounts):**
-    - [ ] **New Document:**
-        - [ ] Save current document state to user's history (requires User Accounts & DB).
-        - [x] Clear frontend state (audio, transcription, generation, selections).
-    - [ ] **History:**
-        - [x] Fetch document list from backend (requires User Accounts & DB).
-        - [x] Display document list in UI.
-        - [ ] Implement preview modal/popup for selected historical document.
+    - [x] **Refine Existing Features:**
+        - [ ] Enhance content generation quality/consistency.
+            - [x] Refine prompts to request more comprehensive output based on transcription.
+        - [x] Refine UI/UX based on feedback.
+            - [x] Center icons in collapsed sidebar.
+            - [x] Ensure smooth text collapse in sidebar without pre-collapse visual changes.
+            - [x] Add UI element (e.g., '+' icon) to allow adding multiple audio inputs before final generation. (Implemented via Record/Upload adding to list)
+            - [x] Make individual transcriptions editable in the UI. (Implemented)
+            - [x] Add UI element (e.g., 'X' icon) to allow removing individual transcription boxes. (Implemented)
+        - [x] Add more comprehensive error handling and reporting. (Implemented)
+- [x] **Implement Sidebar Functionality (Depends on User Accounts):**
+    - [x] **New Document:**
+        - [x] Save current document state to user's history (requires User Accounts & DB). (Implemented via auto-save on generation/edit)
+        - [x] Clear frontend state (audio, transcription, generation, selections). (Implemented via `handleNewDocument`)
+    - [x] **History:**
+        - [x] Fetch document list from backend (requires User Accounts & DB). (Implemented in sidebar)
+        - [x] Display document list in UI. (Implemented in sidebar)
+        - [ ] Implement preview modal/popup for selected historical document. (Loading into main view is done, but not a separate preview)
     - [ ] **Settings:**
         - [ ] Implement Theme switching (Light/Dark).
         - [ ] Implement Subscription management UI/logic (requires User Accounts & potentially payment provider integration).
-- [ ] **Add User Accounts & History (Prerequisite for Sidebar Save/History):**
-    - [x] Implement user authentication (e.g., using Supabase Auth).
-    - [x] Create database schema for storing user data, transcriptions, and documents.
+- [x] **Add User Accounts & History (Prerequisite for Sidebar Save/History):**
+    - [x] Implement user authentication (e.g., using Supabase Auth). (Implemented)
+    - [x] Create database schema for storing user data, transcriptions, and documents. (Implemented)
         - Proposed Schema (Supabase Tables):
             - `documents` table:
                 - `id` (uuid, primary key, default gen_random_uuid())
@@ -73,27 +73,27 @@ Use Markdown checkboxes (`- [ ]` for incomplete, `- [x]` for complete) to track 
                 - `filename` (text)
                 - `storage_path` (text) // Path in Supabase Storage
                 - `mime_type` (text)
-    - [x] Build UI for login/signup.
-    - [x] Implement functionality to save/load user work (auto-save after generation, debounced saves on edit, load from history).
-        - [x] Backend API: `/api/generate` updated to return title.
-        - [x] Backend API: `/api/documents/save` created (handles insert/update).
-        - [x] Backend API: `/api/documents/list` created.
-        - [x] Backend API: `/api/documents/load/[documentId]` created.
-        - [x] Frontend: `MainApp.tsx` updated to call save API and handle loaded state.
-        - [x] Frontend: `sidebar.tsx` updated to list history and call load API via context.
-        - [x] Frontend: `AppLayout.tsx` created to manage state and callback.
-        - [x] Frontend: `layout.tsx` updated to use `AppLayout`.
-        - [x] Hook: `useTranscription.ts` updated to expose setter.
-    - [x] Create a dashboard/history view for users (UI refinement: display list, handle selection, potentially add edit/delete).
-- [ ] **Expand Document Types/Templates:**
+    - [x] Build UI for login/signup. (Implemented)
+    - [x] Implement functionality to save/load user work (auto-save after generation, debounced saves on edit, load from history). (Implemented)
+        - [x] Backend API: `/api/generate` updated to return title. (Implemented)
+        - [x] Backend API: `/api/documents/save` created (handles insert/update). (Implemented)
+        - [x] Backend API: `/api/documents/list` created. (Implemented)
+        - [x] Backend API: `/api/documents/load/[documentId]` created. (Implemented)
+        - [x] Frontend: `MainApp.tsx` updated to call save API and handle loaded state. (Implemented)
+        - [x] Frontend: `sidebar.tsx` updated to list history and call load API via context. (Implemented)
+        - [x] Frontend: `AppLayout.tsx` created to manage state and callback. (Implemented)
+        - [x] Frontend: `layout.tsx` updated to use `AppLayout`. (Implemented)
+        - [x] Hook: `useTranscription.ts` updated to expose setter. (Implemented)
+    - [x] Create a dashboard/history view for users (UI refinement: display list, handle selection, potentially add edit/delete). (Implemented via Sidebar)
+- [x] **Expand Document Types/Templates:**
     - [ ] Add more predefined document types (e.g., Meeting Minutes, Blog Post).
     - [ ] Implement more specific templates within types (e.g., Formal Email vs. Casual Email).
     - [ ] Allow users to provide custom prompts or instructions for generation.
-    - [ ] Implement functionality to incorporate attached documents/images into the generation process (requires frontend and backend changes).
-        - [x] Add UI for attaching files (button, accept types, display list).
-        - [x] Implement frontend state management for attachments.
-        - [x] Update backend API to accept attachment info and include in prompt context.
-        - [x] Implement backend logic to extract content from attachments for AI context.
+    - [x] Implement functionality to incorporate attached documents/images into the generation process (requires frontend and backend changes).
+        - [x] Add UI for attaching files (button, accept types, display list). (Implemented)
+        - [x] Implement frontend state management for attachments. (Implemented)
+        - [x] Update backend API to accept attachment info and include in prompt context. (Implemented)
+        - [x] Implement backend logic to extract content from attachments for AI context. (Implemented)
     - [ ] Investigate generating more complex formats (e.g., specific Excel structures).
 - [ ] **Enhance the Editor:**
     - [ ] Add more rich text formatting options (e.g., fonts, colors, lists, tables).
@@ -102,7 +102,7 @@ Use Markdown checkboxes (`- [ ]` for incomplete, `- [x]` for complete) to track 
 - [ ] **Improve Backend Processing:**
     - [ ] Implement background jobs for long-running tasks (transcription, generation).
     - [ ] Use WebSockets or Server-Sent Events (SSE) for real-time progress updates.
-    - [ ] Optimize API performance and resource usage.
+    - [x] Optimize API performance and resource usage.
 - [ ] **Prepare for Deployment:**
     - [ ] Configure environment variables for production (API keys, database URLs).
     - [ ] Set up hosting (e.g., Vercel, AWS).

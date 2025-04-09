@@ -24,8 +24,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
-import { Loader2, Plus, Paperclip, X } from "lucide-react"; // Import Loader2, Plus, Paperclip, and X
-import RichTextPreviewEditor from '@/components/RichTextPreviewEditor';
+import { Loader2, Paperclip, X, RefreshCw } from "lucide-react"; // Adjusted imports
+import { TooltipProvider } from "@/components/ui/tooltip"; // Only need Provider here now
+import InputControls from './InputControls';
+import TranscriptionDisplay from './TranscriptionDisplay';
+import AttachmentDisplay from './AttachmentDisplay';
+import GenerationOptions from './GenerationOptions';
+import PreviewArea from './PreviewArea';
+import DownloadControls from './DownloadControls';
+
+// Define structure for cache entries
+interface DocTypeCacheEntry {
+  title: string;
+  content: string;
+}
 
 // Define the structure for the loaded document state prop
 interface CurrentDocumentState {
@@ -52,13 +64,12 @@ export default function MainApp({}: MainAppProps) {
   const { loadedDocumentState } = useAppContext();
 
   // --- State Initialization ---
-  // Initialize state with defaults, potentially overridden by localStorage later
   const [selectedLanguage, setSelectedLanguage] = useState('en-US');
   const [outputLanguage, setOutputLanguage] = useState('en');
   const [selectedDocType, setSelectedDocType] = useState('');
   const [selectedFormat, setSelectedFormat] = useState('DOCX'); // Default to DOCX
   const [generatedContent, setGeneratedContent] = useState('');
-  const [isLoading, setIsLoading] = useState(false); // Loading state for generation/saving
+  const [isLoading, setIsLoading] = useState(false); // Loading state for initial generation
   const [isDownloading, setIsDownloading] = useState(false); // Loading state for download
   const [apiError, setApiError] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<File[]>([]); // State for attached files
@@ -66,6 +77,8 @@ export default function MainApp({}: MainAppProps) {
   const [currentDocumentTitle, setCurrentDocumentTitle] = useState<string>(''); // Track saved doc title
   const [isSaving, setIsSaving] = useState(false); // Track saving state for UI feedback
   const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false); // Flag to prevent saving during initial load
+  const [docTypeCache, setDocTypeCache] = useState<Record<string, DocTypeCacheEntry>>({}); // Cache for generated content per docType
+  const [isRegenerating, setIsRegenerating] = useState(false); // Loading state specifically for regeneration
 
   // Use the transcription hook
   const transcriptionHook = useTranscription();
@@ -84,6 +97,11 @@ export default function MainApp({}: MainAppProps) {
 
   // Combine transcriptions from the array for display and generation
   const combinedTranscription = transcriptions.map(t => t.text).join('\n\n---\n\n'); // Join with separator
+  // Derived states for enabling/disabling actions
+  const canGenerate = !!(combinedTranscription || attachments.length > 0);
+  const canRegenerate = !!(selectedDocType && canGenerate);
+  const canDownload = !!(generatedContent && selectedFormat);
+
 
   // Ref for the hidden file input
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -128,11 +146,12 @@ export default function MainApp({}: MainAppProps) {
   }) => {
     if (!docData.title || !docData.generatedContent) {
       console.log("Save skipped: Missing title or content.");
-      return; // Don't save if essential parts are missing
+      return null; // Return null if save skipped
     }
     setIsSaving(true);
     setApiError(null);
     console.log(`Attempting to save document ${docData.documentId ? `(ID: ${docData.documentId})` : '(New)'}...`);
+    let savedDocId = docData.documentId;
 
     try {
       const payload = {
@@ -143,11 +162,10 @@ export default function MainApp({}: MainAppProps) {
         documentType: docData.documentType,
         generatedContent: docData.generatedContent,
         outputFormat: docData.outputFormat,
-        // Map transcriptions from hook state to the format expected by the API
         transcriptions: docData.transcriptions.map((t, index) => ({
           transcribed_text: t.text,
-          order: index, // Use array index for order
-          original_filename: t.originalFilename || undefined, // Pass if available
+          order: index,
+          original_filename: t.originalFilename || undefined,
         })),
       };
 
@@ -164,40 +182,39 @@ export default function MainApp({}: MainAppProps) {
 
       const result = await response.json();
       console.log('Save successful:', result);
-      if (result.documentId && !currentDocumentId) {
-        setCurrentDocumentId(result.documentId); // Store the new ID if it was an insert
+      if (result.documentId) {
+        savedDocId = result.documentId; // Update with the returned ID (new or existing)
+        // Ensure we pass null if savedDocId is somehow falsy, although result.documentId check should prevent this
+        setCurrentDocumentId(savedDocId || null); // Store the new/existing ID
       }
-      // Optionally show a success message briefly?
+      return savedDocId; // Return the saved ID
     } catch (error) {
       console.error("Save API error:", error);
       setApiError(error instanceof Error ? error.message : "An unknown error occurred during save.");
-      // Keep isSaving true on error? Or set false? Let's set false.
       setIsSaving(false);
+      return null; // Return null on error
     } finally {
-      // Set saving false after a short delay to allow UI feedback
       setTimeout(() => setIsSaving(false), 500);
     }
-  }, [currentDocumentId]); // Dependency: currentDocumentId ensures the latest ID is used
+  }, [currentDocumentId]); // Dependency: currentDocumentId
 
-  // Debounced save function
+  // Debounced save function (for subsequent edits)
   const debouncedSave = useCallback(
     debounce((data) => {
-        // Only save if we have a document ID (meaning initial save happened)
-        // and essential data exists
         if (data.documentId && data.generatedContent && data.title) {
             console.log("Debounced save triggered...");
-            saveDocument(data);
+            saveDocument(data); // Call saveDocument, but don't need the returned ID here
         } else {
             console.log("Debounced save skipped (no documentId or missing content/title).");
         }
-    }, 2000), // 2-second debounce delay
-    [saveDocument] // Recreate debounce if saveDocument changes (it shouldn't often due to useCallback)
+    }, 2000),
+    [saveDocument]
   );
 
   // Effect to trigger debounced save on changes AFTER initial generation/save
   useEffect(() => {
-    // Only trigger if we have a document ID
-    if (currentDocumentId) {
+    // Only trigger if we have a document ID and initial load is complete
+    if (currentDocumentId && isInitialLoadComplete) {
       const dataToSave = {
         documentId: currentDocumentId,
         title: currentDocumentTitle,
@@ -206,7 +223,7 @@ export default function MainApp({}: MainAppProps) {
         documentType: selectedDocType,
         generatedContent: generatedContent,
         outputFormat: selectedFormat,
-        transcriptions: transcriptions, // Pass the current transcriptions state
+        transcriptions: transcriptions,
       };
       debouncedSave(dataToSave);
     }
@@ -218,8 +235,9 @@ export default function MainApp({}: MainAppProps) {
       outputLanguage,
       selectedDocType,
       selectedFormat,
-      currentDocumentId, // Include ID as dependency
-      debouncedSave
+      currentDocumentId,
+      debouncedSave,
+      isInitialLoadComplete // Added to prevent saving during load
   ]);
 
   // --- localStorage Persistence ---
@@ -232,32 +250,30 @@ export default function MainApp({}: MainAppProps) {
       try {
         const savedState = JSON.parse(savedStateString);
         console.log("MainApp: Found saved state:", savedState);
-        // Restore state carefully, checking if properties exist
         if (savedState.selectedLanguage) setSelectedLanguage(savedState.selectedLanguage);
         if (savedState.outputLanguage) setOutputLanguage(savedState.outputLanguage);
         if (savedState.selectedDocType) setSelectedDocType(savedState.selectedDocType);
         if (savedState.selectedFormat) setSelectedFormat(savedState.selectedFormat);
         if (savedState.generatedContent) setGeneratedContent(savedState.generatedContent);
-        if (savedState.transcriptions) setTranscriptions(savedState.transcriptions); // Assuming hook handles validation
+        if (savedState.transcriptions) setTranscriptions(savedState.transcriptions);
         if (savedState.currentDocumentId) setCurrentDocumentId(savedState.currentDocumentId);
         if (savedState.currentDocumentTitle) setCurrentDocumentTitle(savedState.currentDocumentTitle);
-        // Don't restore attachments, isLoading, isDownloading, isSaving, apiError
+        // Restore cache if needed? Maybe not, let it regenerate on first click.
+        // if (savedState.docTypeCache) setDocTypeCache(savedState.docTypeCache);
       } catch (error) {
         console.error("Failed to parse saved state from localStorage:", error);
-        localStorage.removeItem(LOCAL_STORAGE_KEY); // Clear corrupted state
+        localStorage.removeItem(LOCAL_STORAGE_KEY);
       }
     } else {
       console.log("MainApp: No saved state found in localStorage.");
     }
-    setIsInitialLoadComplete(true); // Mark initial load as complete
+    setIsInitialLoadComplete(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty dependency array ensures this runs only once on mount
-
+  }, []); // Runs only once on mount
 
   // Debounced function to SAVE state to localStorage
   const debouncedSaveToLocalStorage = useCallback(
     debounce(() => {
-      // Only save if initial load is complete and not currently loading from history
       if (isInitialLoadComplete && !loadedDocumentState) {
         console.log("MainApp: Saving state to localStorage...");
         const stateToSave = {
@@ -266,10 +282,10 @@ export default function MainApp({}: MainAppProps) {
           selectedDocType,
           selectedFormat,
           generatedContent,
-          transcriptions, // Save transcriptions from the hook
+          transcriptions,
           currentDocumentId,
           currentDocumentTitle,
-          // Do not save attachments, loading/saving states, or errors
+          // docTypeCache, // Optionally save cache? Might get large. Let's skip for now.
         };
         try {
           localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(stateToSave));
@@ -279,7 +295,7 @@ export default function MainApp({}: MainAppProps) {
       } else {
          console.log("MainApp: Skipping save to localStorage (initial load not complete or history item loaded).");
       }
-    }, 1000), // 1-second debounce
+    }, 1000),
     [
       isInitialLoadComplete,
       loadedDocumentState,
@@ -291,6 +307,7 @@ export default function MainApp({}: MainAppProps) {
       transcriptions,
       currentDocumentId,
       currentDocumentTitle,
+      // docTypeCache // Add if saving cache
     ]
   );
 
@@ -299,14 +316,23 @@ export default function MainApp({}: MainAppProps) {
     debouncedSaveToLocalStorage();
   }, [debouncedSaveToLocalStorage]);
 
+  // --- Cache Invalidation Logic ---
+  // Effect to clear cache when core inputs change (transcriptions, attachments, languages)
+  useEffect(() => {
+    if (isInitialLoadComplete) {
+      console.log("MainApp: Clearing docTypeCache due to input change (transcription, attachment, language).");
+      setDocTypeCache({});
+    }
+  }, [transcriptions, attachments, selectedLanguage, outputLanguage, isInitialLoadComplete]);
 
   // Effect to update state when a document is loaded from history OR "New Document" is clicked
   useEffect(() => {
-    // Prevent this effect from running until initial localStorage load is done
     if (!isInitialLoadComplete) {
         console.log("MainApp: Skipping history/new effect until initial load complete.");
         return;
     }
+
+    console.log("MainApp: History/New Document effect triggered. loadedDocumentState:", loadedDocumentState);
 
     if (loadedDocumentState) {
       // --- Load from History ---
@@ -318,82 +344,73 @@ export default function MainApp({}: MainAppProps) {
       setSelectedDocType(loadedDocumentState.docType);
       setGeneratedContent(loadedDocumentState.generatedContent);
       setSelectedFormat(loadedDocumentState.outputFormat);
-      // Update transcriptions using the hook's setter function
-      // Map the loaded transcriptions to the structure expected by the hook
       const loadedTranscriptions = loadedDocumentState.transcriptions.map(t => ({
-          id: t.id, // Use the ID from the loaded data
+          id: t.id,
           text: t.text,
-          originalFilename: t.originalFilename,
-          isLoading: false, // Reset loading/error states
+          // Remove originalFilename mapping as it's not part of the hook's internal type
+          isLoading: false,
           error: null,
       }));
-      setTranscriptions(loadedTranscriptions); // Use the hook's setter
-      setAttachments([]); // Clear any local attachments when loading
-      setApiError(null); // Clear any previous errors
-      // Clear localStorage when loading from history to prevent stale state persistence
-      localStorage.removeItem(LOCAL_STORAGE_KEY);
-      console.log("MainApp: Cleared localStorage due to loading from history.");
+      setTranscriptions(loadedTranscriptions);
+      setAttachments([]);
+      setApiError(null);
     } else {
       // --- Handle "New Document" ---
-      // This 'else' block runs when loadedDocumentState is null.
-      // We only reset if the initial load is complete, to distinguish
-      // from the very first render before localStorage is checked.
-      if (isInitialLoadComplete) {
-          console.log("MainApp: Resetting state for New Document.");
-          setCurrentDocumentId(null);
-          setCurrentDocumentTitle('');
-          // Reset selections to defaults if desired, or keep them
-          // setSelectedLanguage('en-US');
-          // setOutputLanguage('en');
-          setSelectedDocType('');
-          setGeneratedContent('');
-          // setSelectedFormat('DOCX');
-          setTranscriptions([]); // Clear transcriptions using the hook's setter
-          setAttachments([]); // Clear attachments
-          setApiError(null); // Clear errors
-          setIsLoading(false); // Reset loading states
-          setIsDownloading(false);
-          setIsSaving(false);
-          // Clear localStorage for a truly new document
-          localStorage.removeItem(LOCAL_STORAGE_KEY);
-          console.log("MainApp: Cleared localStorage for New Document.");
-      }
+      console.log("MainApp: Resetting state for New Document.");
+      setCurrentDocumentId(null);
+      setCurrentDocumentTitle('');
+      // Keep language selections? Reset others.
+      setSelectedDocType('');
+      setGeneratedContent('');
+      setTranscriptions([]);
+      setAttachments([]);
+      setApiError(null);
+      setIsLoading(false);
+      setIsDownloading(false);
+      setIsSaving(false);
+      setIsRegenerating(false);
+      localStorage.removeItem(LOCAL_STORAGE_KEY);
+      console.log("MainApp: Cleared localStorage for New Document.");
     }
-  }, [loadedDocumentState, setTranscriptions, isInitialLoadComplete]); // Add isInitialLoadComplete dependency
+    // Clear cache when loading from history or creating new doc
+    setDocTypeCache({});
+    console.log("MainApp: Cleared docTypeCache due to history load or new document.");
+  }, [loadedDocumentState, setTranscriptions, isInitialLoadComplete]);
 
 
   // --- Generate Content Logic ---
-  const handleGenerateContent = async (docType: string) => {
-    if (!combinedTranscription) {
-      setApiError("Please provide transcription text first.");
+
+  // Function to perform the actual API call and update state/cache
+  const triggerActualGeneration = useCallback(async (docType: string, isRegen: boolean = false) => {
+    if (!combinedTranscription && attachments.length === 0) { // Check both
+      setApiError("Please provide transcription text or attach a file first.");
       return;
     }
-    setIsLoading(true);
+    if (isRegen) {
+      setIsRegenerating(true);
+    } else {
+      setIsLoading(true);
+    }
     setApiError(null);
-    setGeneratedContent(''); // Clear previous content
-    setSelectedDocType(docType); // Set the selected type
+    if (!isRegen) {
+        setGeneratedContent(''); // Clear previous content only on initial generation
+    }
+    setSelectedDocType(docType); // Ensure selected type is updated
+
+    let newDocId = currentDocumentId; // Assume update unless initial save returns new ID
 
     try {
-      // Create FormData object
       const formData = new FormData();
       formData.append('transcription', combinedTranscription);
       formData.append('docType', docType);
       formData.append('outputLanguage', outputLanguage);
-
-      // Append each attachment file
       attachments.forEach((file) => {
-        formData.append('attachments', file); // Use 'attachments' as the key for all files
+        formData.append('attachments', file);
       });
 
       console.log('Sending FormData to /api/generate...');
-      // Log FormData entries (for debugging, might not show files in all browsers)
-      // for (let [key, value] of formData.entries()) {
-      //   console.log(`${key}:`, value);
-      // }
-
       const response = await fetch('/api/generate', {
         method: 'POST',
-        // No 'Content-Type' header needed; browser sets it for FormData
         body: formData,
       });
 
@@ -403,31 +420,93 @@ export default function MainApp({}: MainAppProps) {
       }
 
       const data = await response.json();
-      // Assuming API now returns { generatedTitle, generatedContent }
-      setGeneratedContent(data.generatedContent);
-      setCurrentDocumentTitle(data.generatedTitle || 'Untitled Document'); // Set the title from API
+      const newTitle = data.generatedTitle || 'Untitled Document';
+      const newContent = data.generatedContent;
 
-      // --- Trigger initial save ---
-      await saveDocument({
-        // documentId is null here for insert
-        documentId: null, // Explicitly null for initial save
-        title: data.generatedTitle || 'Untitled Document',
-        inputLanguage: selectedLanguage, // Corrected: Use selectedLanguage
+      setGeneratedContent(newContent);
+      setCurrentDocumentTitle(newTitle);
+
+      // --- Trigger Save ---
+      // Save immediately after generation (initial or regeneration)
+      // If it's the very first generation for this session (no currentDocumentId), saveDocument performs an insert.
+      // If regenerating an existing document, saveDocument performs an update using currentDocumentId.
+      const savedId = await saveDocument({
+        documentId: currentDocumentId, // Pass current ID (null for first time)
+        title: newTitle,
+        inputLanguage: selectedLanguage,
         outputLanguage: outputLanguage,
         documentType: docType,
-        generatedContent: data.generatedContent,
-        outputFormat: selectedFormat, // Need to ensure format is selected or handle default
-        transcriptions: transcriptions, // Pass current transcriptions
+        generatedContent: newContent,
+        outputFormat: selectedFormat,
+        transcriptions: transcriptions,
       });
-      // Note: saveDocument will update currentDocumentId via its response
+
+      if (savedId && !currentDocumentId) {
+          newDocId = savedId; // Update local state if a new ID was returned
+          setCurrentDocumentId(savedId);
+      }
+
+      // Update cache
+      setDocTypeCache(prevCache => ({
+        ...prevCache,
+        [docType]: { title: newTitle, content: newContent }
+      }));
 
     } catch (error) {
       console.error("Generation API error:", error);
       setApiError(error instanceof Error ? error.message : "An unknown error occurred during generation.");
     } finally {
-      setIsLoading(false);
+      if (isRegen) {
+        setIsRegenerating(false);
+      } else {
+        setIsLoading(false);
+      }
     }
+  }, [
+    combinedTranscription,
+    outputLanguage,
+    attachments,
+    saveDocument,
+    selectedLanguage,
+    selectedFormat,
+    transcriptions,
+    setDocTypeCache,
+    currentDocumentId // Include currentDocumentId dependency for saving
+  ]);
+
+  // Handle clicking a document type button (checks cache first)
+  const handleGenerateContent = async (docType: string) => {
+    setSelectedDocType(docType); // Set the type immediately for UI feedback
+
+    // Check cache
+    const cachedEntry = docTypeCache[docType];
+    if (cachedEntry) {
+      console.log(`Cache hit for docType: ${docType}. Displaying cached content.`);
+      setGeneratedContent(cachedEntry.content);
+      setCurrentDocumentTitle(cachedEntry.title);
+      setApiError(null);
+      return; // Use cached content, no API call or save needed
+    }
+
+    // If not in cache, trigger the actual generation
+    console.log(`Cache miss for docType: ${docType}. Triggering generation.`);
+    await triggerActualGeneration(docType, false);
   };
+
+  // Handle clicking the regenerate button (forces generation)
+  const handleRegenerateContent = async () => {
+    if (!selectedDocType) {
+      setApiError("Please select a document type first to regenerate.");
+      return;
+    }
+    if (!combinedTranscription && attachments.length === 0) {
+        setApiError("Cannot regenerate without transcription or attachments.");
+        return;
+    }
+    console.log(`Regeneration requested for docType: ${selectedDocType}.`);
+    await triggerActualGeneration(selectedDocType, true); // Pass true for isRegen
+  };
+
 
   // Function to handle download button click
   const handleDownload = async () => {
@@ -447,7 +526,7 @@ export default function MainApp({}: MainAppProps) {
         body: JSON.stringify({
           content: generatedContent,
           format: selectedFormat,
-          docType: selectedDocType
+          docType: selectedDocType // Pass docType for potential format-specific logic
         }),
       });
 
@@ -469,6 +548,10 @@ export default function MainApp({}: MainAppProps) {
             filename = matches[1].replace(/['"]/g, '');
           }
       }
+      // Use currentDocumentTitle for a better filename if available
+      const baseFilename = currentDocumentTitle || 'generated_document';
+      filename = `${baseFilename}.${selectedFormat.toLowerCase()}`;
+
       a.download = filename;
       document.body.appendChild(a);
       a.click();
@@ -490,6 +573,7 @@ export default function MainApp({}: MainAppProps) {
     { code: 'tr-TR', name: 'Turkish' },
     { code: 'es-ES', name: 'Spanish (Spain)' },
     { code: 'de-DE', name: 'German' },
+    // Add more languages as needed
   ];
 
   const outputLanguages = [
@@ -498,270 +582,141 @@ export default function MainApp({}: MainAppProps) {
       { code: 'tr', name: 'Turkish' },
       { code: 'sw', name: 'Swahili' },
       { code: 'de', name: 'German' },
+      // Add more languages as needed
   ];
 
-  const docTypes = ['Report', 'Email', 'Excel', 'PowerPoint'];
-  const formats = ['DOCX', 'PDF', 'CSV', 'PPTX'];
+  const docTypes = ['Report', 'Email', 'Excel', 'PowerPoint']; // Keep these simple strings
+  const formats = ['DOCX', 'PDF', 'CSV', 'PPTX']; // Keep these simple strings
+
+  // Callback for InputControls record toggle
+  const handleRecordToggle = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
+
+  // Callback for AttachmentDisplay removal
+  const handleRemoveAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
 
   // The entire JSX structure from the original Home component is moved here
   return (
-    // Removed min-h-screen, flex, flex-col, gap-8 to let parent control layout
-    <div className="container mx-auto p-4 md:p-8">
-      {/* Removed test element */}
-      <header className="text-center mb-8"> {/* Added margin-bottom */}
-        <h1 className="text-3xl font-bold">Talk A Doc</h1>
-        <p className="text-muted-foreground">Generate documents from your voice.</p>
-      </header>
+    <TooltipProvider> {/* Wrap with TooltipProvider */}
+      <div className="container mx-auto p-4 md:p-8">
+        <header className="text-center mb-8">
+          <h1 className="text-3xl font-bold">Talk A Doc</h1>
+          <p className="text-muted-foreground">Generate documents from your voice.</p>
+        </header>
 
-      {/* Removed flex-grow from main */}
-      <main className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {/* Left Column: Input & Transcription */}
-        <Card>
-          <CardHeader>
-            <CardTitle>1. Input & Transcribe</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            {/* Language Selection */}
-            <div className="grid w-full max-w-sm items-center gap-1.5">
-              <Label htmlFor="language-select">Select Language</Label>
-              <Select value={selectedLanguage} onValueChange={setSelectedLanguage}>
-                <SelectTrigger id="language-select" className="w-full">
-                  <SelectValue placeholder="Select language..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {languages.map(lang => (
-                    <SelectItem key={lang.code} value={lang.code}>{lang.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Audio Controls */}
-            <div className="flex gap-2">
-              <Button
-                onClick={() => {
-                  if (isRecording) {
-                    stopRecording();
-                  } else {
-                    startRecording();
-                  }
-                }}
-                variant={isRecording ? "destructive" : "default"}
-                className="transition-colors duration-200"
-              >
-                {isRecording ? 'Stop Recording' : 'Start Recording'}
-              </Button>
+        <main className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Left Column: Input & Transcription */}
+          <Card>
+            <CardHeader>
+              <CardTitle>1. Input & Transcribe</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              {/* Hidden file input */}
               <input
                 type="file"
                 ref={fileInputRef}
                 onChange={handleFileChange}
                 style={{ display: 'none' }}
                 accept="audio/*,image/*,.pdf,.doc,.docx,.txt"
-                multiple
+                multiple={false}
               />
-              <Button
-                variant="outline"
-                onClick={handleUploadClick}
-                disabled={isRecording || isTranscribing}
-                className="transition-colors duration-200"
-              >
-                Upload Audio
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={handleUploadClick}
-                disabled={isRecording || isTranscribing}
-                className="transition-colors duration-200"
-                aria-label="Attach file"
-              >
-                <Paperclip className="h-4 w-4" />
-              </Button>
-            </div>
 
-            {/* Transcription Area */}
-            <div className="grid w-full gap-2">
-              <Label>Transcriptions</Label>
-              {transcriptions.length === 0 && !isRecording && !isTranscribing && (
-                 <p className="text-sm text-muted-foreground">Your transcriptions will appear here...</p>
+              <InputControls
+                languages={languages}
+                selectedLanguage={selectedLanguage}
+                onLanguageChange={setSelectedLanguage}
+                isRecording={isRecording}
+                isTranscribing={isTranscribing}
+                onRecordToggle={handleRecordToggle}
+                onUploadClick={handleUploadClick}
+              />
+
+              <TranscriptionDisplay
+                transcriptions={transcriptions}
+                isRecording={isRecording}
+                isTranscribing={isTranscribing}
+                onUpdateText={updateTranscriptionText}
+                onRemoveItem={removeTranscriptionItem}
+              />
+
+              <AttachmentDisplay
+                attachments={attachments}
+                onRemoveAttachment={handleRemoveAttachment}
+              />
+
+              {transcriptionError && (
+                <Alert variant="destructive">
+                  <AlertTitle>Transcription Error</AlertTitle>
+                  <AlertDescription>{transcriptionError}</AlertDescription>
+                </Alert>
               )}
-              {transcriptions.map((item) => (
-                <Card key={item.id} className="bg-muted p-3">
-                  {item.isLoading && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>{item.text || 'Processing...'}</span>
-                    </div>
-                  )}
-                  {item.error && (
-                    <Alert variant="destructive" className="p-2 text-xs">
-                      <AlertTitle>Error</AlertTitle>
-                      <AlertDescription>{item.error}</AlertDescription>
-                    </Alert>
-                  )}
-                  {!item.isLoading && !item.error && (
-                    <div className="relative group">
-                      <Textarea
-                        value={item.text}
-                        onChange={(e) => updateTranscriptionText(item.id, e.target.value)}
-                        placeholder="(Empty transcription)"
-                        className="text-sm bg-background border-0 focus-visible:ring-1 focus-visible:ring-ring pr-8"
-                        rows={Math.max(3, item.text.split('\n').length)}
-                      />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute top-1 right-1 h-6 w-6 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={() => removeTranscriptionItem(item.id)}
-                        aria-label="Remove transcription"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  )}
-                </Card>
-              ))}
-            </div>
 
-            {/* Attachments Area */}
-            <div className="grid w-full gap-2 pt-4 border-t mt-4">
-              <Label>Attachments</Label>
-              {attachments.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No files attached yet.</p>
-              ) : (
-                <ul className="list-disc pl-5 space-y-1">
-                  {attachments.map((file, index) => (
-                    <li key={index} className="text-sm flex justify-between items-center">
-                      <span>{file.name}</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-red-500 hover:text-red-700 h-auto p-1"
-                        onClick={() => setAttachments(prev => prev.filter((_, i) => i !== index))}
-                      >
-                        Remove
-                      </Button>
-                    </li>
-                  ))}
-                </ul>
+              <GenerationOptions
+                outputLanguages={outputLanguages}
+                selectedOutputLanguage={outputLanguage}
+                onOutputLanguageChange={setOutputLanguage}
+                docTypes={docTypes}
+                selectedDocType={selectedDocType}
+                onGenerateContent={handleGenerateContent}
+                isLoading={isLoading}
+                isRegenerating={isRegenerating}
+                canGenerate={canGenerate}
+              />
+
+              {/* Display general API errors here */}
+              {apiError && (
+                <Alert variant="destructive" className="mt-4">
+                  <AlertTitle>Error</AlertTitle>
+                  <AlertDescription>{apiError}</AlertDescription>
+                </Alert>
               )}
-            </div>
 
-            {transcriptionError && (
-              <Alert variant="destructive">
-                <AlertTitle>Error</AlertTitle>
-                <AlertDescription>
-                  {transcriptionError}
-                </AlertDescription>
-              </Alert>
-            )}
+            </CardContent>
+          </Card>
 
-            {/* Output Language Selection */}
-            <div className="grid w-full max-w-sm items-center gap-1.5 pt-4 border-t mt-4">
-              <Label htmlFor="output-language-select">Select Output Language</Label>
-              <Select value={outputLanguage} onValueChange={setOutputLanguage}>
-                <SelectTrigger id="output-language-select" className="w-full">
-                  <SelectValue placeholder="Select language..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {outputLanguages.map(lang => (
-                    <SelectItem key={lang.code} value={lang.code}>{lang.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          {/* Right Column: Preview & Download */}
+          <Card>
+            <PreviewArea
+              generatedContent={generatedContent}
+              onContentChange={setGeneratedContent}
+              currentDocumentTitle={currentDocumentTitle}
+              currentDocumentId={currentDocumentId}
+              isLoading={isLoading}
+              isRegenerating={isRegenerating}
+              isSaving={isSaving}
+              selectedDocType={selectedDocType}
+              canRegenerate={canRegenerate}
+              onRegenerate={handleRegenerateContent}
+            />
+            {/* Place DownloadControls within the Card but outside PreviewArea's CardContent */}
+            <CardContent>
+              <DownloadControls
+                formats={formats}
+                selectedFormat={selectedFormat}
+                onFormatChange={setSelectedFormat}
+                onDownload={handleDownload}
+                canDownload={canDownload}
+                isDownloading={isDownloading}
+                isLoading={isLoading}
+                isRegenerating={isRegenerating}
+                isSaving={isSaving}
+              />
+            </CardContent>
+          </Card>
+        </main>
 
-            {/* Document Type Selection */}
-            <div className="grid w-full gap-1.5">
-              <Label>Select Document Type</Label>
-              <div className="flex flex-wrap gap-2">
-                {docTypes.map(type => (
-                  <Button
-                    key={type}
-                    variant={selectedDocType === type ? "default" : "secondary"}
-                    onClick={() => handleGenerateContent(type)}
-                    disabled={isLoading || !combinedTranscription}
-                    className="transition-colors duration-200"
-                  >
-                    {isLoading && selectedDocType === type ? (
-                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating...</>
-                    ) : type}
-                  </Button>
-                ))}
-              </div>
-            </div>
-
-            {apiError && (
-              <Alert variant="destructive">
-                <AlertTitle>Error</AlertTitle>
-                <AlertDescription>
-                  {apiError}
-                </AlertDescription>
-              </Alert>
-            )}
-
-          </CardContent>
-        </Card>
-
-        {/* Right Column: Preview */}
-        <Card>
-           <CardHeader>
-             <CardTitle>2. Preview</CardTitle>
-           </CardHeader>
-           <CardContent className="flex flex-col gap-4">
-             <div className="grid w-full gap-1.5">
-               <Label htmlFor="preview-area">
-                 Preview (Editable)
-                 {isLoading ? ' (Generating...)' : ''}
-                 {isSaving ? ' (Saving...)' : ''}
-                 {currentDocumentId ? ` (Saved: ${currentDocumentTitle || 'Untitled'})` : ''}
-               </Label>
-               {/* TODO: Consider adding an input field for the title here eventually */}
-               {/* <Input value={currentDocumentTitle} onChange={(e) => setCurrentDocumentTitle(e.target.value)} placeholder="Document Title..." className="mb-2" /> */}
-               <RichTextPreviewEditor
-                 id="preview-area"
-                 value={generatedContent}
-                 onChange={setGeneratedContent}
-               />
-             </div>
-
-             {/* Output Format Selection */}
-             <div className="grid w-full gap-1.5 pt-4 border-t mt-4">
-               <Label>Select Output Format</Label>
-               <div className="flex flex-wrap gap-2">
-                 {formats.map(format => (
-                   <Button
-                     key={format}
-                     variant={selectedFormat === format ? "default" : "secondary"}
-                     onClick={() => setSelectedFormat(format)}
-                     className="transition-colors duration-200"
-                   >
-                     {format}
-                   </Button>
-                 ))}
-               </div>
-             </div>
-
-             {/* Download Button */}
-             {/* Download Button */}
-             <Button
-               onClick={handleDownload}
-               disabled={!generatedContent || !selectedFormat || isDownloading || isLoading || isSaving}
-               className="transition-colors duration-200 w-full"
-             >
-               {isDownloading ? (
-                 <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Downloading...</>
-               ) : `Download ${selectedFormat || '...'}`}
-             </Button>
-
-           </CardContent>
-        </Card>
-      </main>
-
-      {/* Removed mt-auto as flex layout is removed from outer div */}
-      <footer className="text-center text-sm text-muted-foreground pt-8 border-t mt-8"> {/* Added top margin/padding */}
-        Powered by Next.js, Supabase, Gemini, and Google Cloud Speech.
-      </footer>
-    </div>
+        <footer className="text-center text-sm text-muted-foreground pt-8 border-t mt-8">
+          Powered by Next.js, Supabase, Gemini, and Google Cloud Speech.
+        </footer>
+      </div>
+    </TooltipProvider>
   );
 }
