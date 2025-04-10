@@ -1,12 +1,23 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react'; // Keep useState
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { useExpandable } from '@/hooks/use-expandable'; // Keep useExpandable
+import { useExpandable } from '@/hooks/use-expandable';
 import { cn } from '@/lib/utils';
-import { Loader2, AlertCircle, ExternalLink, Download, Copy, Check } from 'lucide-react';
+import { Loader2, AlertCircle, ExternalLink, Download, Copy, Check, Trash2 } from 'lucide-react'; // Added Trash2 icon
 import type { LoadedDocumentData } from './sidebar';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"; // Added AlertDialog components
 import {
   Dialog,
   DialogContent,
@@ -29,22 +40,24 @@ import {
 interface DocumentSummary {
   id: string;
   title: string;      // Use title
-  updated_at: string; // Use updated_at
+  updated_at: string;
 }
 
 interface ExpandableDocumentCardProps {
   document: DocumentSummary;
+  onActionSuccess: () => Promise<void>; // Add prop for callback after successful action (like delete)
 }
 
-export function ExpandableDocumentCard({ document }: ExpandableDocumentCardProps) {
+export function ExpandableDocumentCard({ document, onActionSuccess }: ExpandableDocumentCardProps) {
   const detailsContentRef = useRef<HTMLDivElement>(null);
-  const { isExpanded, toggleExpand } = useExpandable(false); // Remove animatedHeight from hook usage
+  const { isExpanded, toggleExpand } = useExpandable(false);
   const [fullDocumentData, setFullDocumentData] = useState<LoadedDocumentData | null>(null);
   const [isContentLoading, setIsContentLoading] = useState(false);
   const [contentError, setContentError] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false); // State for delete operation
 
   // Fetch full document content when expanded
   useEffect(() => {
@@ -149,11 +162,41 @@ export function ExpandableDocumentCard({ document }: ExpandableDocumentCardProps
     event.preventDefault();
   };
 
+  // Handle Delete Action
+  const handleDelete = useCallback(async () => {
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/documents/delete/${document.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        // Attempt to parse error, provide fallback
+        const errorData = await response.json().catch(() => ({ error: `Deletion failed: ${response.status}` }));
+        throw new Error(errorData.error || `Deletion failed: ${response.status}`);
+      }
+
+      console.log(`Document ${document.id} deleted successfully.`);
+      // Call the callback to refresh the list in the parent component
+      await onActionSuccess();
+      // Note: The card will disappear because the parent re-renders the list without this item.
+      // No need to manually hide the card here.
+
+    } catch (error) {
+      console.error(`[${document.id}] Error deleting document:`, error);
+      // Display error to user (e.g., using a toast notification library)
+      alert(`Failed to delete document: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsDeleting(false);
+      // Close the alert dialog if needed, though it might close automatically on action click
+    }
+  }, [document.id, onActionSuccess]);
+
 
   return (
-    <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-      {/* Card Part */}
-      {/* Card Part */}
+    <AlertDialog> {/* Wrap card content potentially triggering delete */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        {/* Card Part */}
       <div
         className={cn(
           "relative bg-gradient-to-b dark:from-neutral-900 from-neutral-100 dark:to-neutral-950 to-white",
@@ -198,12 +241,30 @@ export function ExpandableDocumentCard({ document }: ExpandableDocumentCardProps
               Updated: {new Date(document.updated_at).toLocaleDateString()}
             </p>
           </div>
+
+          {/* Delete Icon Button - Conditionally Rendered before the chevron */}
+          {isExpanded && (
+            <AlertDialogTrigger asChild>
+              {/* Stop propagation to prevent card collapse when clicking delete */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/50 flex-shrink-0" // Added flex-shrink-0
+                onClick={(e) => e.stopPropagation()}
+                disabled={isDeleting}
+              >
+                {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              </Button>
+            </AlertDialogTrigger>
+          )}
+
+          {/* Collapse/Expand Icon */}
           <motion.div
-              animate={{ rotate: isExpanded ? 180 : 0 }}
-              transition={{ duration: 0.2 }}
-              className="text-neutral-500 flex-shrink-0 mt-1"
+            animate={{ rotate: isExpanded ? 180 : 0 }}
+            transition={{ duration: 0.2 }}
+            className="text-neutral-500 flex-shrink-0 mt-1" // Kept flex-shrink-0
           >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
           </motion.div>
         </div>
 
@@ -250,13 +311,12 @@ export function ExpandableDocumentCard({ document }: ExpandableDocumentCardProps
                 </DialogTrigger>
               </div>
             )}
-               {/* Removed the "Expand to load details" message as loading handles this */}
             </div>
           </motion.div>
-        </div>} 
+        </div>}
       </div>
 
-      {/* Modal Content */}
+      {/* Modal Content (for viewing full document) */}
       <DialogContent
         className="sm:max-w-[80vw] md:max-w-[70vw] lg:max-w-[60vw] h-[80vh] flex flex-col p-0 gap-0"
         onOpenAutoFocus={handleOpenAutoFocus} // Prevent auto-focus
@@ -300,6 +360,25 @@ export function ExpandableDocumentCard({ document }: ExpandableDocumentCardProps
            </TooltipProvider>
          </DialogFooter>
        </DialogContent>
-    </Dialog>
+      </Dialog>
+
+      {/* Alert Dialog Content (for delete confirmation) */}
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This action cannot be undone. This will permanently delete the document
+            "{document.title || 'Untitled Document'}" and remove its data from our servers.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={handleDelete} disabled={isDeleting} className="bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-800">
+            {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

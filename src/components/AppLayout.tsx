@@ -1,14 +1,21 @@
 "use client";
 
-import React, { useState, useCallback, createContext, useContext, useEffect } from 'react'; // Added useEffect
-import { SidebarBody, SidebarProvider } from "./sidebar"; // Import SidebarBody and SidebarProvider
-import type { LoadedDocumentData } from "./sidebar"; // Import the type definition
+import React, { useState, useCallback, createContext, useContext, useEffect } from 'react';
+import { SidebarBody, SidebarProvider } from "./sidebar";
+import type { LoadedDocumentData } from "./sidebar";
 import AuthForm from './AuthForm'; // Import the AuthForm component
 import { createClientClient } from '@/lib/supabaseBrowserClient'; // Import Supabase client
 import { Dialog } from "@/components/ui/dialog"; // Import Dialog
-import { ProfileEditDialogContent } from "@/components/ProfileEditDialog"; // Import Profile Dialog Content
+import { ProfileEditDialogContent } from "@/components/ProfileEditDialog";
 
-// Define the shape of the context data including profile info and dialog state
+// Define type for history items (moved from sidebar.tsx)
+interface HistoryItem {
+  id: string;
+  title: string;
+  updated_at: string;
+}
+
+// Define the shape of the context data including profile info, dialog state, and history
 interface AppContextType {
   loadedDocumentState: CurrentDocumentState | null;
   handleLoadDocument: (data: LoadedDocumentData) => void;
@@ -17,8 +24,13 @@ interface AppContextType {
   avatarUrl: string | null;
   updateUserProfile: (profile: { username?: string | null; avatar_url?: string | null }) => void;
   isProfileDialogOpen: boolean; // State for dialog visibility
-  setIsProfileDialogOpen: React.Dispatch<React.SetStateAction<boolean>>; // Setter for dialog state
-  openProfileDialog: () => void; // Function to open dialog
+  setIsProfileDialogOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  openProfileDialog: () => void;
+  // Add history state and fetch function to context
+  historyItems: HistoryItem[];
+  isHistoryLoading: boolean;
+  historyError: string | null;
+  fetchHistory: () => Promise<void>; // Function to refresh history
 }
 
 // Create the context with a default value (or null/undefined)
@@ -60,7 +72,11 @@ export default function AppLayout({ children, user }: AppLayoutProps) {
   // State for global user profile info
   const [username, setUsername] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false); // Add state for profile dialog
+  const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false);
+  // State for document history (moved from sidebar.tsx)
+  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   // Fetch initial profile data (username, avatar) on mount if user exists
   useEffect(() => {
@@ -87,8 +103,10 @@ export default function AppLayout({ children, user }: AppLayoutProps) {
         }
       };
       fetchInitialProfile();
+      fetchHistory(); // Fetch initial history as well
     }
-  }, [user, supabase]); // Re-run if user or supabase client changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, supabase]); // Dependencies: user, supabase
 
   // Callback function passed to the Sidebar
   const handleLoadDocument = useCallback((data: LoadedDocumentData) => {
@@ -122,6 +140,36 @@ export default function AppLayout({ children, user }: AppLayoutProps) {
     setLoadedDocumentState(newState);
   }, []);
 
+  // Fetch history logic (moved from sidebar.tsx)
+  const fetchHistory = useCallback(async () => {
+    if (!user) return; // Don't fetch if no user
+
+    console.log("AppLayout: Fetching history...");
+    setIsHistoryLoading(true);
+    setHistoryError(null);
+    try {
+      // Use the browser client here as this runs client-side
+      const { data, error } = await supabase
+        .from('documents') // Assuming 'documents' is the table name
+        .select('id, title, updated_at')
+        .eq('user_id', user.id) // Ensure we only get the logged-in user's documents
+        .order('updated_at', { ascending: false }); // Order by most recently updated
+
+      if (error) {
+        throw error;
+      }
+
+      setHistoryItems(data || []);
+      console.log("AppLayout: History fetched successfully.", data?.length);
+    } catch (error: any) {
+      console.error("AppLayout: Error fetching history:", error);
+      setHistoryError(error.message || "Unknown error fetching history");
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  // Include supabase and user in dependencies
+  }, [supabase, user]);
+
   // Function to clear the loaded state (e.g., when clicking "New Document")
   const handleNewDocument = useCallback(() => {
       console.log("AppLayout: Clearing loaded document state for New Document.");
@@ -145,7 +193,6 @@ export default function AppLayout({ children, user }: AppLayoutProps) {
     setIsProfileDialogOpen(true);
   }, []);
 
-
   // If user is not logged in, show the AuthForm
   if (!user) {
     return (
@@ -166,8 +213,13 @@ export default function AppLayout({ children, user }: AppLayoutProps) {
     avatarUrl,
     updateUserProfile,
     isProfileDialogOpen, // Add dialog state
-    setIsProfileDialogOpen, // Add dialog setter
-    openProfileDialog, // Add function to open dialog
+    setIsProfileDialogOpen,
+    openProfileDialog,
+    // Add history state and fetch function to the context value
+    historyItems,
+    isHistoryLoading,
+    historyError,
+    fetchHistory,
   };
 
   return (

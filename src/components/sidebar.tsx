@@ -17,18 +17,19 @@ import {
 } from "lucide-react";
 import { ScrollArea } from "../components/ui/scroll-area";
 import LogoutButton from "./LogoutButton";
-import { Button } from "./ui/button"; // Import Button for history items
-import { useAppContext } from "./AppLayout"; // Import App context hook
+import { Button } from "./ui/button";
+import { useAppContext } from "./AppLayout";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"; // Import Tooltip components
 // Dialog related imports are no longer needed here for MobileSidebar profile
-import { Dialog, DialogTrigger } from "@/components/ui/dialog"; // Keep for DesktopSidebar
-import { ProfileEditDialogContent } from "@/components/ProfileEditDialog"; // Keep for DesktopSidebar
+import { Dialog, DialogTrigger } from "@/components/ui/dialog";
+import { ProfileEditDialogContent } from "@/components/ProfileEditDialog";
 
-// Define types for history items and loaded documents
-interface HistoryItem {
-  id: string;
-  title: string;
-  updated_at: string;
-}
+// HistoryItem type is now defined in AppLayout.tsx
 
 // Define the structure for the loaded document data (matching the load API response)
 // Export this interface so other components can use it
@@ -166,44 +167,27 @@ export const DesktopSidebar: FC<DesktopSidebarProps> = ({
 }) => {
   // Get onLoadDocument from context
   const { open, setOpen, animate, onLoadDocument } = useSidebar();
-  // Get profile info and handleNewDocument from AppContext
-  // Note: openProfileDialog is not needed in DesktopSidebar
-  const { handleNewDocument, username, avatarUrl } = useAppContext();
-  const router = useRouter(); // Initialize router
-  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
-  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
-  const [historyError, setHistoryError] = useState<string | null>(null);
+  // Get profile info, handleNewDocument, and history state/functions from AppContext
+  const {
+    handleNewDocument,
+    username,
+    avatarUrl,
+    historyItems, // Use context state
+    isHistoryLoading, // Use context state
+    historyError, // Use context state
+    // fetchHistory is now handled by AppLayout's useEffect
+  } = useAppContext();
+  const router = useRouter();
+  // Local state only for tracking which doc is currently being loaded
   const [isLoadingDoc, setIsLoadingDoc] = useState<string | null>(null);
 
-  // Fetch history logic (remains the same)
-  const fetchHistory = useCallback(async () => {
-    setIsHistoryLoading(true);
-    setHistoryError(null);
-    try {
-      const response = await fetch('/api/documents/list');
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Failed to fetch history: ${response.status}`);
-      }
-      const data: HistoryItem[] = await response.json();
-      setHistoryItems(data);
-    } catch (error) {
-      console.error("Error fetching history:", error);
-      setHistoryError(error instanceof Error ? error.message : "Unknown error fetching history");
-    } finally {
-      setIsHistoryLoading(false);
-    }
-  }, []);
+  // Remove local fetchHistory function and useEffect hook
 
-  useEffect(() => {
-    fetchHistory();
-  }, [fetchHistory]);
-
-  // Handle loading document logic (remains the same, uses onLoadDocument from context)
+  // Handle loading document logic (uses onLoadDocument from SidebarContext)
   const handleLoadDocument = async (documentId: string) => {
     if (!onLoadDocument) return;
     setIsLoadingDoc(documentId);
-    setHistoryError(null);
+    // setHistoryError(null); // Removed - Error state is now global for list fetching
     try {
       const response = await fetch(`/api/documents/load/${documentId}`);
       if (!response.ok) {
@@ -215,7 +199,8 @@ export const DesktopSidebar: FC<DesktopSidebarProps> = ({
       router.push('/'); // Navigate to main page after loading
     } catch (error) {
       console.error(`Error loading document ${documentId}:`, error);
-      setHistoryError(error instanceof Error ? error.message : "Unknown error loading document");
+      // setHistoryError(error instanceof Error ? error.message : "Unknown error loading document"); // Removed - Error state is now global
+      // TODO: Consider adding local error handling/notification for load failure if needed
     } finally {
       setIsLoadingDoc(null);
     }
@@ -293,16 +278,26 @@ export const DesktopSidebar: FC<DesktopSidebarProps> = ({
                  <div className="p-2 text-sm text-neutral-500">No saved documents found.</div>
               )}
               {!isHistoryLoading && !historyError && historyItems.map(item => (
-                <Button
-                  key={item.id}
-                  variant="ghost"
-                  className="w-full justify-start text-sm py-1 px-2 h-auto font-normal text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700"
-                  onClick={() => handleLoadDocument(item.id)}
-                  disabled={isLoadingDoc === item.id}
-                >
-                  {isLoadingDoc === item.id && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                  {item.title || 'Untitled Document'}
-                </Button>
+                <TooltipProvider key={item.id} delayDuration={100}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        className="text-sm py-1 px-2 h-auto font-normal text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-md flex items-center justify-start w-full"
+                        onClick={() => handleLoadDocument(item.id)}
+                        disabled={isLoadingDoc === item.id}
+                      >
+                        {isLoadingDoc === item.id && <Loader2 className="h-4 w-4 animate-spin mr-2 flex-shrink-0" />}
+                        <div className="flex-1 min-w-0 max-w-[200px]">
+                          <span className="block truncate">{item.title || 'Untitled Document'}</span>
+                        </div>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" align="start">
+                      <p>{item.title || 'Untitled Document'}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               ))}
             </div>
           </ScrollArea>
@@ -359,44 +354,28 @@ export const MobileSidebar: FC<MobileSidebarProps> = ({
 }) => {
   // Get onLoadDocument from context
   const { open, setOpen, onLoadDocument } = useSidebar();
-  // Get profile info, handleNewDocument, and openProfileDialog from AppContext
-  const { handleNewDocument, username, avatarUrl, openProfileDialog } = useAppContext(); // Added openProfileDialog
-  const router = useRouter(); // Initialize router
-  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
-  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
-  const [historyError, setHistoryError] = useState<string | null>(null);
+  // Get profile info, handleNewDocument, openProfileDialog, and history state/functions from AppContext
+  const {
+    handleNewDocument,
+    username,
+    avatarUrl,
+    openProfileDialog,
+    historyItems, // Use context state
+    isHistoryLoading, // Use context state
+    historyError, // Use context state
+    // fetchHistory is now handled by AppLayout's useEffect
+  } = useAppContext();
+  const router = useRouter();
+  // Local state only for tracking which doc is currently being loaded
   const [isLoadingDoc, setIsLoadingDoc] = useState<string | null>(null);
-  // Removed isProfileDialogOpen state
 
-  // Fetch history logic (remains the same)
-  const fetchHistory = useCallback(async () => {
-    setIsHistoryLoading(true);
-    setHistoryError(null);
-    try {
-      const response = await fetch('/api/documents/list');
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Failed to fetch history: ${response.status}`);
-      }
-      const data: HistoryItem[] = await response.json();
-      setHistoryItems(data);
-    } catch (error) {
-      console.error("Error fetching history:", error);
-      setHistoryError(error instanceof Error ? error.message : "Unknown error fetching history");
-    } finally {
-      setIsHistoryLoading(false);
-    }
-  }, []);
+  // Remove local fetchHistory function and useEffect hook
 
-  useEffect(() => {
-    fetchHistory();
-  }, [fetchHistory]);
-
-  // Handle loading document logic (remains the same, uses onLoadDocument from context)
+  // Handle loading document logic (uses onLoadDocument from SidebarContext)
   const handleLoadDocument = async (documentId: string) => {
     if (!onLoadDocument) return;
     setIsLoadingDoc(documentId);
-    setHistoryError(null);
+    // setHistoryError(null); // Removed - Error state is now global for list fetching
     try {
       const response = await fetch(`/api/documents/load/${documentId}`);
       if (!response.ok) {
@@ -409,7 +388,8 @@ export const MobileSidebar: FC<MobileSidebarProps> = ({
       setOpen(false); // Close mobile sidebar after loading
     } catch (error) {
       console.error(`Error loading document ${documentId}:`, error);
-      setHistoryError(error instanceof Error ? error.message : "Unknown error loading document");
+      // setHistoryError(error instanceof Error ? error.message : "Unknown error loading document"); // Removed - Error state is now global
+      // TODO: Consider adding local error handling/notification for load failure if needed
     } finally {
       setIsLoadingDoc(null);
     }
@@ -501,16 +481,26 @@ export const MobileSidebar: FC<MobileSidebarProps> = ({
                        <div className="p-2 text-sm text-neutral-500">No saved documents found.</div>
                     )}
                     {!isHistoryLoading && !historyError && historyItems.map(item => (
-                      <Button
-                        key={item.id}
-                        variant="ghost"
-                        className="w-full justify-start text-sm py-1 px-2 h-auto font-normal text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700"
-                        onClick={() => handleLoadDocument(item.id)}
-                        disabled={isLoadingDoc === item.id}
-                      >
-                        {isLoadingDoc === item.id && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                        {item.title || 'Untitled Document'}
-                      </Button>
+                      <TooltipProvider key={item.id} delayDuration={100}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              className="text-sm py-1 px-2 h-auto font-normal text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-md flex items-center justify-start w-full"
+                              onClick={() => handleLoadDocument(item.id)}
+                              disabled={isLoadingDoc === item.id}
+                            >
+                              {isLoadingDoc === item.id && <Loader2 className="h-4 w-4 animate-spin mr-2 flex-shrink-0" />}
+                              <div className="flex-1 min-w-0 max-w-[200px]">
+                                <span className="block truncate">{item.title || 'Untitled Document'}</span>
+                              </div>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="right" align="start">
+                            <p>{item.title || 'Untitled Document'}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     ))}
                   </div>
                 </ScrollArea>
