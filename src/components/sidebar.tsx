@@ -359,14 +359,14 @@ export const DesktopSidebar: FC<DesktopSidebarProps> = ({
                     {/* Dropdown Menu placed after the main button */}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex-shrink-0">
+                        <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex-shrink-0 z-50">
                           <MoreHorizontal className="h-4 w-4" />
                           <span className="sr-only">More options</span>
                         </Button>
                       </DropdownMenuTrigger>
                       {/* Wrap Content in Portal */}
                       <DropdownMenuPortal>
-                        <DropdownMenuContent align="end" sideOffset={5} onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenuContent align="end" sideOffset={5} className="z-[150]" onClick={(e) => e.stopPropagation()}>
                           <DropdownMenuItem onSelect={openRenameDialog}>
                             <Pencil className="mr-2 h-4 w-4" />
                             <span>Rename</span>
@@ -376,7 +376,7 @@ export const DesktopSidebar: FC<DesktopSidebarProps> = ({
                             <span>{item.pinned ? 'Unpin' : 'Pin to top'}</span>
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onSelect={openDeleteDialog} className="text-red-600 focus:text-red-600">
+                          <DropdownMenuItem onSelect={openDeleteDialog} className="text-red-600 focus:text-red-600 dark:text-red-500 dark:focus:text-red-500">
                             <Trash2 className="mr-2 h-4 w-4" />
                             <span>Delete</span>
                           </DropdownMenuItem>
@@ -660,14 +660,14 @@ export const MobileSidebar: FC<MobileSidebarProps> = ({
                          {/* Dropdown Menu placed after the main button */}
                          <DropdownMenu>
                            <DropdownMenuTrigger asChild>
-                             <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex-shrink-0">
+                             <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex-shrink-0 z-50">
                                <MoreHorizontal className="h-4 w-4" />
                                <span className="sr-only">More options</span>
                              </Button>
                            </DropdownMenuTrigger>
                            {/* Wrap Content in Portal */}
                            <DropdownMenuPortal>
-                             <DropdownMenuContent align="end" sideOffset={5} onClick={(e) => e.stopPropagation()}>
+                             <DropdownMenuContent align="end" sideOffset={5} className="z-[150]" onClick={(e) => e.stopPropagation()}>
                                <DropdownMenuItem onSelect={openRenameDialog}>
                                  <Pencil className="mr-2 h-4 w-4" />
                                  <span>Rename</span>
@@ -677,7 +677,7 @@ export const MobileSidebar: FC<MobileSidebarProps> = ({
                                  <span>{item.pinned ? 'Unpin' : 'Pin to top'}</span>
                                </DropdownMenuItem>
                                <DropdownMenuSeparator />
-                               <DropdownMenuItem onSelect={openDeleteDialog} className="text-red-600 focus:text-red-600">
+                               <DropdownMenuItem onSelect={openDeleteDialog} className="text-red-600 focus:text-red-600 dark:text-red-500 dark:focus:text-red-500">
                                  <Trash2 className="mr-2 h-4 w-4" />
                                  <span>Delete</span>
                                </DropdownMenuItem>
