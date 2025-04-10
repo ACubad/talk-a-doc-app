@@ -13,6 +13,7 @@ interface HistoryItem {
   id: string;
   title: string;
   updated_at: string;
+  pinned?: boolean; // Add pinned status
 }
 
 // Define the shape of the context data including profile info, dialog state, and history
@@ -31,6 +32,10 @@ interface AppContextType {
   isHistoryLoading: boolean;
   historyError: string | null;
   fetchHistory: () => Promise<void>; // Function to refresh history
+  // Add handlers for document actions
+  renameDocument: (id: string, newTitle: string) => Promise<void>;
+  pinDocument: (id: string, pinned: boolean) => Promise<void>;
+  deleteDocument: (id: string) => Promise<void>;
 }
 
 // Create the context with a default value (or null/undefined)
@@ -149,18 +154,20 @@ export default function AppLayout({ children, user }: AppLayoutProps) {
     setHistoryError(null);
     try {
       // Use the browser client here as this runs client-side
-      const { data, error } = await supabase
-        .from('documents') // Assuming 'documents' is the table name
-        .select('id, title, updated_at')
-        .eq('user_id', user.id) // Ensure we only get the logged-in user's documents
-        .order('updated_at', { ascending: false }); // Order by most recently updated
+      // Select the new 'pinned' column and adjust ordering
+      const { data: historyData, error: historyError } = await supabase // Renamed variables
+        .from('documents')
+        .select('id, title, updated_at, pinned') // Add pinned
+        .eq('user_id', user.id)
+        .order('pinned', { ascending: false, nullsFirst: false }) // Pinned items first
+        .order('updated_at', { ascending: false }); // Then by date
 
-      if (error) {
-        throw error;
+      if (historyError) { // Use renamed variable
+        throw historyError; // Use renamed variable
       }
 
-      setHistoryItems(data || []);
-      console.log("AppLayout: History fetched successfully.", data?.length);
+      setHistoryItems(historyData || []); // Use renamed variable
+      console.log("AppLayout: History fetched successfully.", historyData?.length); // Use renamed variable
     } catch (error: any) {
       console.error("AppLayout: Error fetching history:", error);
       setHistoryError(error.message || "Unknown error fetching history");
@@ -169,6 +176,98 @@ export default function AppLayout({ children, user }: AppLayoutProps) {
     }
   // Include supabase and user in dependencies
   }, [supabase, user]);
+
+  // --- Document Action Handlers ---
+
+  const handleRenameDocument = useCallback(async (id: string, newTitle: string) => {
+    console.log(`AppLayout: Renaming document ${id} to "${newTitle}"`);
+    // Optimistic UI update
+    setHistoryItems(prevItems =>
+      prevItems.map(item =>
+        item.id === id ? { ...item, title: newTitle } : item
+      )
+    );
+    try {
+      const response = await fetch(`/api/documents/rename/${id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ title: newTitle }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to rename document: ${response.status}`);
+      }
+      // Optimistic update was successful
+      console.log("AppLayout: Rename API call SUCCESS");
+    } catch (error) {
+      console.error("AppLayout: Error renaming document:", error);
+      // Revert optimistic update on failure
+      fetchHistory(); // Re-fetch to get the correct state
+      // TODO: Show error notification to user
+    }
+  }, [fetchHistory]); // Add fetchHistory dependency
+
+  const handlePinDocument = useCallback(async (id: string, pinned: boolean) => {
+    console.log(`AppLayout: Setting pinned status for document ${id} to ${pinned}`);
+    // Optimistic UI update & re-sorting
+    setHistoryItems(prevItems =>
+      prevItems
+        .map(item => (item.id === id ? { ...item, pinned } : item))
+        .sort((a, b) => {
+          const pinA = a.pinned ? 1 : 0;
+          const pinB = b.pinned ? 1 : 0;
+          if (pinB !== pinA) return pinB - pinA; // Pinned first
+          // Keep original date sort for items with same pinned status
+          return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+        })
+    );
+    try {
+       const response = await fetch(`/api/documents/pin/${id}`, {
+         method: 'PATCH',
+         headers: {
+           'Content-Type': 'application/json',
+         },
+         body: JSON.stringify({ pinned: pinned }),
+       });
+
+       if (!response.ok) {
+         const errorData = await response.json();
+         throw new Error(errorData.error || `Failed to update pin status: ${response.status}`);
+       }
+      // Optimistic update was successful
+      console.log("AppLayout: Pin API call SUCCESS");
+    } catch (error) {
+      console.error("AppLayout: Error pinning document:", error);
+      // Revert optimistic update on failure
+      fetchHistory(); // Re-fetch to get the correct state
+      // TODO: Show error notification to user
+    }
+  }, [fetchHistory]); // Add fetchHistory dependency
+
+  const handleDeleteDocument = useCallback(async (id: string) => {
+    console.log(`AppLayout: Deleting document ${id}`);
+    // Optimistic UI update
+    const originalItems = historyItems;
+    setHistoryItems(prevItems => prevItems.filter(item => item.id !== id));
+    // Use existing API call
+    try {
+      const response = await fetch(`/api/documents/delete/${id}`, { method: 'DELETE' });
+      if (!response.ok) {
+         const errorData = await response.json();
+         throw new Error(errorData.error || `Failed to delete document: ${response.status}`);
+      }
+      console.log("AppLayout: Delete API call SUCCESS");
+      // If successful, optimistic update is correct. Maybe show success notification.
+    } catch (error) {
+      console.error("AppLayout: Error deleting document:", error);
+      // Revert optimistic update on failure
+      setHistoryItems(originalItems); // Restore original items
+      // TODO: Show error notification to user
+    }
+  }, [historyItems]); // Add historyItems dependency
 
   // Function to clear the loaded state (e.g., when clicking "New Document")
   const handleNewDocument = useCallback(() => {
@@ -220,6 +319,10 @@ export default function AppLayout({ children, user }: AppLayoutProps) {
     isHistoryLoading,
     historyError,
     fetchHistory,
+    // Add new handlers to context value
+    renameDocument: handleRenameDocument,
+    pinDocument: handlePinDocument,
+    deleteDocument: handleDeleteDocument,
   };
 
   return (

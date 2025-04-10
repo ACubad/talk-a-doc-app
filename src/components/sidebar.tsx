@@ -12,8 +12,13 @@ import {
   FilePenLine,
   Search,
   FolderKanban,
+  MoreHorizontal, // Added for dropdown trigger
+  Trash2, // Added for delete action
+  Pin, // Added for pin action
+  Pencil, // Added for rename action
   Settings,
   LogOut,
+  PinOff, // Added for unpin action
 } from "lucide-react";
 import { ScrollArea } from "../components/ui/scroll-area";
 import LogoutButton from "./LogoutButton";
@@ -24,10 +29,35 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip"; // Import Tooltip components
+} from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuPortal, // Import Portal
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 // Dialog related imports are no longer needed here for MobileSidebar profile
+// Keep Dialog for Profile Edit, add AlertDialog for Delete Confirmation
 import { Dialog, DialogTrigger } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger, // We might trigger differently
+} from "@/components/ui/alert-dialog";
+// We'll need Input and Label for the Rename Dialog later
+// import { Input } from "@/components/ui/input";
+// import { Label } from "@/components/ui/label";
 import { ProfileEditDialogContent } from "@/components/ProfileEditDialog";
+import { RenameDocumentDialog } from "./RenameDocumentDialog"; // Import the new dialog
+// TODO: Import DeleteConfirmationDialog when created
 
 // HistoryItem type is now defined in AppLayout.tsx
 
@@ -175,11 +205,19 @@ export const DesktopSidebar: FC<DesktopSidebarProps> = ({
     historyItems, // Use context state
     isHistoryLoading, // Use context state
     historyError, // Use context state
+    // Get action handlers from context
+    renameDocument,
+    pinDocument,
+    deleteDocument,
     // fetchHistory is now handled by AppLayout's useEffect
   } = useAppContext();
   const router = useRouter();
-  // Local state only for tracking which doc is currently being loaded
+  // Local state for tracking which doc is currently being loaded
   const [isLoadingDoc, setIsLoadingDoc] = useState<string | null>(null);
+  // Local state for managing dialogs
+  const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [selectedDoc, setSelectedDoc] = useState<{ id: string; title: string; pinned?: boolean } | null>(null);
 
   // Remove local fetchHistory function and useEffect hook
 
@@ -215,7 +253,7 @@ export const DesktopSidebar: FC<DesktopSidebarProps> = ({
     <motion.div
       // Restore conditional styles and animation/hover handlers
       className={cn(
-        "h-full py-4 hidden md:flex md:flex-col bg-neutral-100 dark:bg-neutral-800 w-[300px] flex-shrink-0 overflow-hidden",
+        "h-full py-4 hidden md:flex md:flex-col bg-neutral-100 dark:bg-neutral-800 w-[300px] flex-shrink-0", // Removed overflow-hidden here
         paddingX, // Restore conditional padding
         alignItems, // Restore conditional alignment
         className
@@ -262,8 +300,9 @@ export const DesktopSidebar: FC<DesktopSidebarProps> = ({
         </div>
 
         {/* Middle Scrollable History Section - Restore conditional rendering */}
+        {/* Ensure ScrollArea itself doesn't clip */}
         {open && (
-          <ScrollArea className="flex-grow my-4 border-t border-b border-neutral-200 dark:border-neutral-700">
+          <ScrollArea className="flex-grow my-4 border-t border-b border-neutral-200 dark:border-neutral-700 overflow-visible"> {/* Added overflow-visible */}
             <div className="p-2">
               <h3 className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase mb-2">History</h3>
               {isHistoryLoading && (
@@ -277,31 +316,121 @@ export const DesktopSidebar: FC<DesktopSidebarProps> = ({
               {!isHistoryLoading && !historyError && historyItems.length === 0 && (
                  <div className="p-2 text-sm text-neutral-500">No saved documents found.</div>
               )}
-              {!isHistoryLoading && !historyError && historyItems.map(item => (
-                <TooltipProvider key={item.id} delayDuration={100}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        className="text-sm py-1 px-2 h-auto font-normal text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-md flex items-center justify-start w-full"
-                        onClick={() => handleLoadDocument(item.id)}
-                        disabled={isLoadingDoc === item.id}
-                      >
-                        {isLoadingDoc === item.id && <Loader2 className="h-4 w-4 animate-spin mr-2 flex-shrink-0" />}
-                        <div className="flex-1 min-w-0 max-w-[200px]">
-                          <span className="block truncate">{item.title || 'Untitled Document'}</span>
-                        </div>
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="right" align="start">
-                      <p>{item.title || 'Untitled Document'}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              ))}
+              {!isHistoryLoading && !historyError && historyItems.map(item => {
+                // Prepare handlers for dialog triggers and direct actions
+                const openRenameDialog = () => {
+                  setSelectedDoc(item);
+                  setIsRenameDialogOpen(true);
+                };
+                const openDeleteDialog = () => {
+                  setSelectedDoc(item);
+                  setIsDeleteDialogOpen(true);
+                };
+                const togglePin = () => {
+                  pinDocument(item.id, !item.pinned); // Call context function directly
+                };
+
+                return (
+                  // Revert to div wrapping Button and DropdownMenu separately
+                  <div key={item.id} className="flex items-center justify-between group hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-md pr-1">
+                    <TooltipProvider delayDuration={100}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          {/* Use the Grid layout */}
+                          <Button
+                            variant="ghost"
+                            className="flex-1 text-sm py-1 px-2 h-auto font-normal text-neutral-700 dark:text-neutral-300 hover:bg-transparent dark:hover:bg-transparent rounded-md grid grid-cols-[auto_1fr] items-center justify-start w-full text-left gap-1.5"
+                            onClick={() => handleLoadDocument(item.id)}
+                            disabled={isLoadingDoc === item.id}
+                          >
+                            <span className="w-4 h-4 flex items-center justify-center"> {/* Icon container */}
+                              {isLoadingDoc === item.id ? ( <Loader2 className="h-4 w-4 animate-spin" /> )
+                               : item.pinned ? ( <Pin className="h-3 w-3 text-blue-500" /> )
+                               : null }
+                            </span>
+                            <span className="block truncate">{item.title || 'Untitled Document'}</span>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" align="start">
+                          <p>{item.title || 'Untitled Document'}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                    {/* Dropdown Menu placed after the main button */}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex-shrink-0">
+                          <MoreHorizontal className="h-4 w-4" />
+                          <span className="sr-only">More options</span>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      {/* Wrap Content in Portal */}
+                      <DropdownMenuPortal>
+                        <DropdownMenuContent align="end" sideOffset={5} onClick={(e) => e.stopPropagation()}>
+                          <DropdownMenuItem onSelect={openRenameDialog}>
+                            <Pencil className="mr-2 h-4 w-4" />
+                            <span>Rename</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onSelect={togglePin}>
+                            {item.pinned ? ( <PinOff className="mr-2 h-4 w-4" /> ) : ( <Pin className="mr-2 h-4 w-4" /> )}
+                            <span>{item.pinned ? 'Unpin' : 'Pin to top'}</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onSelect={openDeleteDialog} className="text-red-600 focus:text-red-600">
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            <span>Delete</span>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenuPortal>
+                    </DropdownMenu>
+                  </div>
+                );
+              })}
             </div>
           </ScrollArea>
         )}
+
+        {/* Dialogs (Rendered conditionally based on state) */}
+        <RenameDocumentDialog
+          isOpen={isRenameDialogOpen}
+          onOpenChange={(open) => {
+            setIsRenameDialogOpen(open);
+            if (!open) setSelectedDoc(null); // Clear selected doc when closing
+          }}
+          documentId={selectedDoc?.id ?? null}
+          currentTitle={selectedDoc?.title ?? null}
+        />
+
+        {/* Delete Confirmation Dialog (Using AlertDialog for now) */}
+        <AlertDialog open={isDeleteDialogOpen} onOpenChange={(open) => {
+            setIsDeleteDialogOpen(open);
+            if (!open) setSelectedDoc(null); // Clear selected doc when closing
+          }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently delete the document
+                "{selectedDoc?.title}".
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setSelectedDoc(null)}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-red-600 hover:bg-red-700"
+                onClick={() => {
+                  if (selectedDoc) {
+                    deleteDocument(selectedDoc.id); // Call context function
+                  }
+                  setSelectedDoc(null);
+                }}
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
 
         {/* Bottom Static Section */}
         <div className="mt-auto">
@@ -363,11 +492,19 @@ export const MobileSidebar: FC<MobileSidebarProps> = ({
     historyItems, // Use context state
     isHistoryLoading, // Use context state
     historyError, // Use context state
+    // Get action handlers from context
+    renameDocument,
+    pinDocument,
+    deleteDocument,
     // fetchHistory is now handled by AppLayout's useEffect
   } = useAppContext();
   const router = useRouter();
-  // Local state only for tracking which doc is currently being loaded
+  // Local state for tracking which doc is currently being loaded
   const [isLoadingDoc, setIsLoadingDoc] = useState<string | null>(null);
+  // Local state for managing dialogs (mirrors DesktopSidebar)
+  const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [selectedDoc, setSelectedDoc] = useState<{ id: string; title: string; pinned?: boolean } | null>(null);
 
   // Remove local fetchHistory function and useEffect hook
 
@@ -466,7 +603,7 @@ export const MobileSidebar: FC<MobileSidebarProps> = ({
                 </div>
 
                 {/* Middle Scrollable History Section - Mobile */}
-                <ScrollArea className="flex-grow my-4 border-t border-b border-neutral-200 dark:border-neutral-700">
+                <ScrollArea className="flex-grow my-4 border-t border-b border-neutral-200 dark:border-neutral-700 overflow-visible"> {/* Added overflow-visible */}
                   <div className="p-2">
                     <h3 className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase mb-2">History</h3>
                     {isHistoryLoading && (
@@ -480,30 +617,119 @@ export const MobileSidebar: FC<MobileSidebarProps> = ({
                     {!isHistoryLoading && !historyError && historyItems.length === 0 && (
                        <div className="p-2 text-sm text-neutral-500">No saved documents found.</div>
                     )}
-                    {!isHistoryLoading && !historyError && historyItems.map(item => (
-                      <TooltipProvider key={item.id} delayDuration={100}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              className="text-sm py-1 px-2 h-auto font-normal text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-md flex items-center justify-start w-full"
-                              onClick={() => handleLoadDocument(item.id)}
-                              disabled={isLoadingDoc === item.id}
-                            >
-                              {isLoadingDoc === item.id && <Loader2 className="h-4 w-4 animate-spin mr-2 flex-shrink-0" />}
-                              <div className="flex-1 min-w-0 max-w-[200px]">
-                                <span className="block truncate">{item.title || 'Untitled Document'}</span>
-                              </div>
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="right" align="start">
-                            <p>{item.title || 'Untitled Document'}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    ))}
+                    {!isHistoryLoading && !historyError && historyItems.map(item => {
+                      // Prepare handlers for dialog triggers and direct actions (mirrors DesktopSidebar)
+                      const openRenameDialog = () => {
+                        setSelectedDoc(item);
+                        setIsRenameDialogOpen(true);
+                      };
+                      const openDeleteDialog = () => {
+                        setSelectedDoc(item);
+                        setIsDeleteDialogOpen(true);
+                      };
+                      const togglePin = () => {
+                        pinDocument(item.id, !item.pinned); // Call context function directly
+                      };
+
+                      return (
+                        // Revert to div wrapping Button and DropdownMenu separately
+                        <div key={item.id} className="flex items-center justify-between group hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-md pr-1">
+                           <TooltipProvider delayDuration={100}>
+                             <Tooltip>
+                               <TooltipTrigger asChild>
+                                 {/* Use the Grid layout from previous attempt */}
+                                 <Button
+                                   variant="ghost"
+                                   className="flex-1 text-sm py-1 px-2 h-auto font-normal text-neutral-700 dark:text-neutral-300 hover:bg-transparent dark:hover:bg-transparent rounded-md grid grid-cols-[auto_1fr] items-center justify-start w-full text-left gap-1.5"
+                                   onClick={() => handleLoadDocument(item.id)}
+                                   disabled={isLoadingDoc === item.id}
+                                 >
+                                   <span className="w-4 h-4 flex items-center justify-center">
+                                     {isLoadingDoc === item.id ? ( <Loader2 className="h-4 w-4 animate-spin" /> )
+                                      : item.pinned ? ( <Pin className="h-3 w-3 text-blue-500" /> )
+                                      : null }
+                                   </span>
+                                   <span className="block truncate">{item.title || 'Untitled Document'}</span>
+                                 </Button>
+                               </TooltipTrigger>
+                               <TooltipContent side="right" align="start">
+                                 <p>{item.title || 'Untitled Document'}</p>
+                               </TooltipContent>
+                           </Tooltip>
+                         </TooltipProvider>
+                         {/* Dropdown Menu placed after the main button */}
+                         <DropdownMenu>
+                           <DropdownMenuTrigger asChild>
+                             <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex-shrink-0">
+                               <MoreHorizontal className="h-4 w-4" />
+                               <span className="sr-only">More options</span>
+                             </Button>
+                           </DropdownMenuTrigger>
+                           {/* Wrap Content in Portal */}
+                           <DropdownMenuPortal>
+                             <DropdownMenuContent align="end" sideOffset={5} onClick={(e) => e.stopPropagation()}>
+                               <DropdownMenuItem onSelect={openRenameDialog}>
+                                 <Pencil className="mr-2 h-4 w-4" />
+                                 <span>Rename</span>
+                               </DropdownMenuItem>
+                               <DropdownMenuItem onSelect={togglePin}>
+                                 {item.pinned ? ( <PinOff className="mr-2 h-4 w-4" /> ) : ( <Pin className="mr-2 h-4 w-4" /> )}
+                                 <span>{item.pinned ? 'Unpin' : 'Pin to top'}</span>
+                               </DropdownMenuItem>
+                               <DropdownMenuSeparator />
+                               <DropdownMenuItem onSelect={openDeleteDialog} className="text-red-600 focus:text-red-600">
+                                 <Trash2 className="mr-2 h-4 w-4" />
+                                 <span>Delete</span>
+                               </DropdownMenuItem>
+                             </DropdownMenuContent>
+                           </DropdownMenuPortal>
+                         </DropdownMenu>
+                        </div>
+                      );
+                    })}
                   </div>
                 </ScrollArea>
+
+                 {/* Dialogs (Rendered conditionally based on state) - Copied from DesktopSidebar */}
+                 <RenameDocumentDialog
+                   isOpen={isRenameDialogOpen}
+                   onOpenChange={(open) => {
+                     setIsRenameDialogOpen(open);
+                     if (!open) setSelectedDoc(null); // Clear selected doc when closing
+                   }}
+                   documentId={selectedDoc?.id ?? null}
+                   currentTitle={selectedDoc?.title ?? null}
+                 />
+
+                 {/* Delete Confirmation Dialog (Using AlertDialog for now) */}
+                 <AlertDialog open={isDeleteDialogOpen} onOpenChange={(open) => {
+                     setIsDeleteDialogOpen(open);
+                     if (!open) setSelectedDoc(null); // Clear selected doc when closing
+                   }}>
+                   <AlertDialogContent>
+                     <AlertDialogHeader>
+                       <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                       <AlertDialogDescription>
+                         This action cannot be undone. This will permanently delete the document
+                         "{selectedDoc?.title}".
+                       </AlertDialogDescription>
+                     </AlertDialogHeader>
+                     <AlertDialogFooter>
+                       <AlertDialogCancel onClick={() => setSelectedDoc(null)}>Cancel</AlertDialogCancel>
+                       <AlertDialogAction
+                         className="bg-red-600 hover:bg-red-700"
+                         onClick={() => {
+                           if (selectedDoc) {
+                             deleteDocument(selectedDoc.id); // Call context function
+                           }
+                           setSelectedDoc(null);
+                         }}
+                       >
+                         Delete
+                       </AlertDialogAction>
+                     </AlertDialogFooter>
+                   </AlertDialogContent>
+                 </AlertDialog>
 
                 {/* Bottom Static Section */}
                 <div className="mt-auto pb-4">
